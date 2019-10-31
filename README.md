@@ -6,4 +6,4 @@ A flexible framework for reinforcement learning that puts together:
 - [Action stacks](https://boardgamegeek.com/boardgamemechanic/2689/action-queue)
 - [OpenAI Gym](https://gym.openai.com/)
 
-Some code is blatantly copied and pasted from Google's Brain Coder which is permitted by Apache License
+Some code is blatantly copied and pasted from [Google's Brain Coder](https://github.com/tensorflow/models/tree/master/research/brain_coder) which is permitted by [Apache License](LICENSE)
