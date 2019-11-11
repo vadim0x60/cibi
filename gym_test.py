@@ -1,0 +1,67 @@
+from scrum_master import ScrumMaster
+from developer import Developer, FullStackDeveloper
+from lm import LanguageModel
+from defaults import default_config_with_updates
+from options import task_launcher
+
+import tensorflow as tf
+import gym
+import logging
+import os
+
+
+
+@task_launcher
+def run_gym_test(config, task_id, logdir, summary_tasks, master, log_level):
+    config = default_config_with_updates(config)
+
+    logging.basicConfig(level=log_level)
+    logger = logging.getLogger(__file__)
+
+    is_chief = (task_id == 0)
+    train_dir = os.path.join(logdir, 'train')
+    best_model_checkpoint = os.path.join(train_dir, 'best.ckpt')
+    events_dir = '%s/events_%d' % (logdir, task_id)
+    logger.info('Events directory: %s', events_dir)
+
+    developer = Developer(config, LanguageModel, cycle_program=True)
+
+    variables_to_save = [v for v in tf.global_variables()
+                         if v.name.startswith('global')]
+    global_init_op = tf.variables_initializer(variables_to_save)
+    saver = tf.train.Saver(variables_to_save)
+
+    if summary_tasks and task_id < summary_tasks:
+        summary_writer = tf.summary.FileWriter(events_dir)
+    else:
+        summary_writer = None
+
+    def init_fn(unused_sess):
+        logger.info('No checkpoint found. Initialized global params.')
+
+    sv = tf.train.Supervisor(is_chief=is_chief,
+                             logdir=train_dir,
+                             saver=saver,
+                             summary_op=None,
+                             init_op=global_init_op,
+                             init_fn=init_fn,
+                             summary_writer=summary_writer,
+                             ready_op=tf.report_uninitialized_variables(variables_to_save),
+                             ready_for_local_init_op=None,
+                             global_step=developer.global_step,
+                             save_model_secs=30,
+                             save_summaries_secs=30)
+
+    with sv.managed_session(master) as session:
+        developer.initialize(session)
+        agent = ScrumMaster(FullStackDeveloper(developer, session))
+
+        env = gym.make('NChain-v0')
+        env.reset()
+        agent.attend_gym(env)
+        env.close()
+
+    logging.basicConfig()
+
+if __name__ == '__main__':
+    run_gym_test()

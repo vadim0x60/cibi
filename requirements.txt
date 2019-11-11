@@ -1,0 +1,6 @@
+numpy==1.*
+scipy==1.*
+tensorflow==1.*
+six==1.*
+gym==0.*
+click==7.*

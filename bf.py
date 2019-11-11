@@ -9,6 +9,8 @@ Language info: https://en.wikipedia.org/wiki/Brainfuck
 + ! to write to the beginning of the stack
 """
 
+from agent import Agent, ActionError
+
 from collections import namedtuple
 import time
 
@@ -64,12 +66,15 @@ def buildbracemap(code):
       correct_syntax = False
   return bracemap, correct_syntax
 
-class ProgramFinishedError(RuntimeError):
-  pass
+class ProgramFinishedError(ActionError):
+  def __init__(self, program_result):
+    msg = f'Trying to execute a program that has finished with {program_result}'
+    super().__init__(msg, program_result)
 
-class BrainfuckAgent():
+class BrainfuckAgent(Agent):
   def __init__(self, code, init_memory=None, base=256, null_value=0,
-               max_steps=2 ** 20, require_correct_syntax=True, debug=False):
+               max_steps=2 ** 20, require_correct_syntax=True, debug=False,
+               cycle = False):
     code = list(code)
     self.bracemap, correct_syntax = buildbracemap(code)  # will modify code list
 
@@ -78,6 +83,7 @@ class BrainfuckAgent():
     self.debug = debug
     self.base = base
     self.null_value = null_value
+    self.cycle = cycle
 
     self.program_trace = [] if debug else None
     self.codeptr, self.cellptr = 0, 0
@@ -102,7 +108,7 @@ class BrainfuckAgent():
 
   def execute(self):
     if self.state == State.FINISHED:
-      raise ProgramFinishedError
+      raise ProgramFinishedError(self.result)
     if self.state == State.AWAITING_INPUT:
       return
 
@@ -148,6 +154,9 @@ class BrainfuckAgent():
         self.state = State.FINISHED
         return
 
+      if self.cycle and self.codeptr == len(self.code):
+        self.codeptr = 0
+
     self.record_snapshot(command)
 
     self.state = State.FINISHED
@@ -164,7 +173,6 @@ class BrainfuckAgent():
 
     self.codeptr += 1
     self.steps += 1
-
 
   def act(self):
     try:
