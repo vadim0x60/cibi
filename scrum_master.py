@@ -1,14 +1,19 @@
 from agent import Agent
+from bf import ProgramFinishedError, Result
 
 class ScrumMaster(Agent):
     """
-    Solves reinforcement learning tasks by asking the developer to 
-    write programs to solve them and running the programs
-    At the moment, Scrum master is only able to manage one developer
+    Solves reinforcement learning tasks by managing a Developer
+    - directing them to write programs
+    - forcing them to reprogram if the programs don't compile
+    - giving them positive and negative reinforcement
+    - measuring their performance
+    At the moment, Scrum Master is only able to manage one developer
     """
 
-    def __init__(self, developer, sprint_length=100):
+    def __init__(self, developer, sprint_length=100, coerce_action=lambda x: x):
         self.developer = developer
+        self.coerce_action = coerce_action
 
         self.sprint_length = sprint_length
         self.sprint_ttl = sprint_length
@@ -19,16 +24,31 @@ class ScrumMaster(Agent):
         self.rewards = []
 
     def input(self, inp):
-        self.program.input(inp)
+        try:
+            self.program.input(inp)
+        except ProgramFinishedError:
+            if self.program.result != Result.SUCCESS:
+                self.reward(0, force_reprogram=True)
+                self.input(inp)
+            else:
+                raise
 
     def act(self):
-        return self.program.act()
+        try:
+            action = self.program.act()
+            return self.coerce_action(action)
+        except ProgramFinishedError:
+            if self.program.result != Result.SUCCESS:
+                self.reward(0, force_reprogram=True)
+                return self.act()
+            else:
+                raise
 
-    def reward(self, reward):
+    def reward(self, reward, force_reprogram=False):
         self.rewards.append(reward)
         self.sprint_ttl -= 1
 
-        if self.sprint_ttl == 0:
+        if force_reprogram or self.sprint_ttl == 0:
             self.reprogram()
         else:
             self.sprint_ttl = self.sprint_length

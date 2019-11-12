@@ -43,6 +43,7 @@ class Developer(object):
                summary_interval=1,
                run_number=0,
                logging_dir='/tmp', model_v=0):
+    self.batch_size = config.batch_size
     self.task_id = task_id
     self.ps_tasks = ps_tasks
     self.is_chief = is_chief
@@ -303,6 +304,7 @@ class FullStackDeveloper():
   def __init__(self, developer, session):
     self.developer = developer
     self.session = session
+    self.batch_size = developer.batch_size
 
   def write_programs(self):
     return self.developer.write_programs(self.session)

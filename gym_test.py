@@ -54,11 +54,16 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, log_level):
 
     with sv.managed_session(master) as session:
         developer.initialize(session)
-        agent = ScrumMaster(FullStackDeveloper(developer, session))
 
         env = gym.make('NChain-v0')
+        if type(env.action_space) == gym.spaces.Discrete:
+            coerce_action = lambda action: action % env.action_space.n
+        else:
+            coerce_action = lambda x: x
+        agent = ScrumMaster(FullStackDeveloper(developer, session), coerce_action=coerce_action)
         env.reset()
-        agent.attend_gym(env)
+        total_reward = agent.attend_gym(env, reps=10000)
+        logger.info(total_reward)
         env.close()
 
     logging.basicConfig()

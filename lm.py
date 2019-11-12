@@ -634,14 +634,15 @@ class LanguageModel:
     for actions, value_estimate, episode_length, action_log_probs in zip(
         batch_actions, batch_values, episode_lengths, log_probs
       ):
-      code = str(BF_INT_TO_CHAR[a] for a in actions[:episode_length])
+      code = str([BF_INT_TO_CHAR[a] for a in actions[:episode_length]])
+
+      logger.info(f'Wrote program: {code}')
 
       if self.cycle_program:
-        logger.info('Generating a perpetually cycled program')
         program = bf.BrainfuckAgent(code, cycle=True, max_steps=None)
       else:
-        logger.info('Generating a standard program')
         program = bf.BrainfuckAgent(code, cycle=False)
+
       program.log_probs = action_log_probs
       program.value_estimate = value_estimate
       programs.append(program)

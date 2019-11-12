@@ -25,11 +25,16 @@ class Agent():
             self.input(observation)
             
             for _ in range(reps):
-                env.render()      
+                try:
+                    env.render()  
+                except NotImplementedError:
+                    pass
+                    
                 action = self.act()
 
                 observation, reward, done, info = env.step(action)
                 total_reward += reward
+                logger.info(f'Got reward {reward}')
 
                 self.reward(reward)
                 self.input(observation)
