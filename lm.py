@@ -131,7 +131,6 @@ class LanguageModel:
                do_iw_summaries=False,
                cycle_program=False,
                dtype=tf.float32,
-               batch_size=10,
                verbose_level=0,
                is_local=True):
     self.config = config = global_config.agent
@@ -146,7 +145,8 @@ class LanguageModel:
     self.pi_loss_hparam = config.pi_loss_hparam
     self.vf_loss_hparam = config.vf_loss_hparam
     self.is_local = is_local
-    self.batch_size = batch_size
+
+    self.batch_size = global_config.batch_size
 
     self.top_reward = 0.0
     self.embeddings_trainable = True
@@ -607,6 +607,62 @@ class LanguageModel:
     self.rl_text_summary_op = tf.summary.text('rl',
                                               self.text_summary_placeholder)
 
+  def _rl_text_summary(self, session, step, npe, tot_r, num_steps, code, result):
+    """Logs summary about a single episode and creates a text_summary for TB.
+
+    Args:
+      session: tf.Session instance.
+      step: Global training step.
+      npe: Number of programs executed so far.
+      tot_r: Total reward.
+      num_steps: Number of timesteps in the episode (i.e. code length).
+      code: String representation of the code.
+      result: Result of program execution
+
+    Returns:
+      Serialized text summary data for tensorboard.
+    """
+    if not code:
+      code = ' '
+    text = (
+        'Tot R: **%.2f**;  Len: **%d**;  Result: **%s**\n\n'
+        '\n\nCode: **`%s`**'
+        % (tot_r, num_steps, result, code))
+    text_summary = session.run(self.rl_text_summary_op,
+                               {self.text_summary_placeholder: text})
+    logging.info(
+        'Step %d.\t NPE: %d\t Result: %s.\t Tot R: %.2f.\t Length: %d. \tProgram: %s',
+        step, npe, result, tot_r, num_steps, code)
+    return text_summary
+
+  def _rl_reward_summary(self, total_rewards):
+    """Create summary ops that report on episode rewards.
+
+    Creates summaries for average, median, max, and min rewards in the batch.
+
+    Args:
+      total_rewards: Tensor of shape [batch_size] containing the total reward
+          from each episode in the batch.
+
+    Returns:
+      tf.Summary op.
+    """
+    tr = np.asarray(total_rewards)
+    reward_summary = tf.Summary(value=[
+        tf.Summary.Value(
+            tag='reward/avg',
+            simple_value=np.mean(tr)),
+        tf.Summary.Value(
+            tag='reward/med',
+            simple_value=np.median(tr)),
+        tf.Summary.Value(
+            tag='reward/max',
+            simple_value=np.max(tr)),
+        tf.Summary.Value(
+            tag='reward/min',
+            simple_value=np.min(tr))])
+    return reward_summary
+
   def write_programs(self, session):
     """Generate Brainfuck programs with this language model"""
 
@@ -634,7 +690,7 @@ class LanguageModel:
     for actions, value_estimate, episode_length, action_log_probs in zip(
         batch_actions, batch_values, episode_lengths, log_probs
       ):
-      code = str([BF_INT_TO_CHAR[a] for a in actions[:episode_length]])
+      code = ''.join([BF_INT_TO_CHAR[a] for a in actions[:episode_length]])
 
       logger.info(f'Wrote program: {code}')
 
@@ -649,13 +705,13 @@ class LanguageModel:
 
     return programs
 
-  def reflect(self, session, programs, train_op, global_step_op, return_gradients=False):
+  def reflect(self, session, reinforcement, train_op, global_step_op, return_gradients=False):
     """Improve language generation based on rewards from the real world
 
     Args:
       session: tf.Session instance.
-      programs: BrainfuckAgents that have been exectued and have 
-          agent.rewards attatched to them
+      reinforcement: a Reinforcement object that summarizes the results of 
+          recent program runs
       train_op: A TF op which will perform the gradient update. LMAgent does not
           own its training op, so that trainers can do distributed training
           and construct a specialized training op.
@@ -670,24 +726,19 @@ class LanguageModel:
     """
     assert self.is_local
 
-    # Compute rewards.
-    batch_actions = [[BF_CHAR_TO_INT[c] for c in program.code] for program in programs]
-    batch_rewards = [program.rewards for program in programs]
-    episode_lengths = [len(program.code) for program in programs]
-    batch_values = [program.value_estimate for program in programs]
-
     # Do update for REINFORCE or REINFORCE + replay buffer.
     if self.experience_replay is None:
       # Train with on-policy REINFORCE.
+      num_programs_from_policy = reinforcement.episode_count
       
       # Process on-policy samples.
       batch_targets, batch_returns = process_episodes(
-          batch_rewards, episode_lengths, a2c=self.a2c,
+          reinforcement.action_rewards, reinforcement.episode_lengths, a2c=self.a2c,
           baselines=self.ema_by_len,
-          batch_values=batch_values)
+          batch_values=reinforcement.episode_values)
       batch_policy_multipliers = batch_targets
       batch_emp_values = batch_returns if self.a2c else [[]]
-      adjusted_lengths = episode_lengths
+      adjusted_lengths = reinforcement.episode_lengths
 
       if self.top_episodes:
         assert len(self.top_episodes) > 0  # pylint: disable=g-explicit-length-test
@@ -711,7 +762,7 @@ class LanguageModel:
           'gradients': self.gradients_dict if return_gradients else self.no_op}
       fetched = session.run(
           fetches,
-          {self.actions: batch_actions,
+          {self.actions: reinforcement.episode_actions,
           self.empirical_values: batch_emp_values,
           self.policy_multipliers: batch_policy_multipliers,
           self.adjusted_lengths: adjusted_lengths,
@@ -742,13 +793,13 @@ class LanguageModel:
         _,  # log probs
         replay_adjusted_lengths) = zip(*experience_samples)
 
-        replay_batch_actions = utils.stack_pad(replay_actions, pad_axes=0,
+        replay_episode_actions = utils.stack_pad(replay_actions, pad_axes=0,
                                               dtype=np.int32)
 
         # compute log probs for replay samples under current policy
         all_replay_log_probs, = session.run(
             [self.given_batch.log_probs],
-            {self.actions: replay_batch_actions,
+            {self.actions: replay_episode_actions,
             self.adjusted_lengths: replay_adjusted_lengths})
         replay_log_probs = [
             np.choose(replay_actions[i], all_replay_log_probs[i, :l].T).sum()
@@ -769,7 +820,7 @@ class LanguageModel:
       p = num_programs_from_policy
       
       batch_targets, batch_returns = process_episodes(
-          batch_rewards, episode_lengths[:p], a2c=False,
+          reinforcement.episode_rewards, reinforcement.episode_lengths[:p], a2c=False,
           baselines=self.ema_by_len)
       batch_policy_multipliers = batch_targets
       batch_emp_values = [[]]
@@ -777,13 +828,13 @@ class LanguageModel:
 
       # Process off-policy samples.
       if (not empty_replay_buffer) and num_programs_from_replay_buff:
-        offp_batch_rewards = [
+        offp_episode_rewards = [
             [0.0] * (l - 1) + [r]
             for l, r in zip(replay_adjusted_lengths, replay_rewards)]
-        assert len(offp_batch_rewards) == num_programs_from_replay_buff
+        assert len(offp_episode_rewards) == num_programs_from_replay_buff
         assert len(replay_adjusted_lengths) == num_programs_from_replay_buff
         replay_batch_targets, replay_returns = process_episodes(
-            offp_batch_rewards, replay_adjusted_lengths, a2c=False,
+            offp_episode_rewards, replay_adjusted_lengths, a2c=False,
             baselines=self.ema_by_len)
         # Convert 2D array back into ragged 2D list.
         replay_policy_multipliers = [
@@ -792,7 +843,7 @@ class LanguageModel:
             in enumerate(
                 replay_adjusted_lengths[:num_programs_from_replay_buff])]
 
-      adjusted_lengths = episode_lengths[:num_programs_from_policy]
+      adjusted_lengths = reinforcement.episode_lengths[:num_programs_from_policy]
 
       if self.top_episodes:
         assert len(self.top_episodes) > 0  # pylint: disable=g-explicit-length-test
@@ -811,14 +862,14 @@ class LanguageModel:
       # On-policy episodes.
       if num_programs_from_policy:
         separate_actions = [
-            batch_actions[i, :l]
+            reinforcement.episode_actions[i, :l]
             for i, l in enumerate(adjusted_lengths)]
         chosen_log_probs = [
             np.choose(separate_actions[i], log_probs[i, :l].T)
             for i, l in enumerate(adjusted_lengths)]
         new_experiences = [
             (separate_actions[i],
-            batch_tot_r[i],
+            reinforcement.episode_rewards[i],
             chosen_log_probs[i].sum(), l)
             for i, l in enumerate(adjusted_lengths)]
         on_policy_policy_multipliers = [
@@ -839,7 +890,7 @@ class LanguageModel:
         # Look for new experiences in replay buffer. Assign weight if an episode
         # is in the buffer.
         on_policy_weights = [0] * num_programs_from_policy
-        for i, cs in enumerate(code_strings):
+        for i, cs in enumerate(reinforcement.episode_code_strings):
           if self.experience_replay.has_key(cs):
             on_policy_weights[i] = self.experience_replay.get_weight(cs)
 
@@ -894,12 +945,12 @@ class LanguageModel:
       # Train on replay batch, top-k MLE.
       assert self.program_count is not None
       fetches = {
-          'global_step': train_context.global_step_op,
+          'global_step': global_step_op,
           'program_count': self.program_count,
           'summaries': self.rl_summary_op,
-          'train_op': train_context.train_op,
+          'train_op': train_op,
           'gradients': self.gradients_dict if return_gradients else self.no_op}
-      fetched = train_context.session.run(
+      fetched = session.run(
           fetches,
           {self.actions: combined_actions,
           self.empirical_values: [[]],  # replay_emp_values,
@@ -913,10 +964,10 @@ class LanguageModel:
       self.experience_replay.add_many(
           objs=new_experiences,
           weights=[exp(r / self.replay_temperature) for r in batch_tot_r],
-          keys=code_strings)
+          keys=reinforcement.episode_code_strings)
 
     # Update program count.
-    train_context.session.run(
+    session.run(
         [self.program_count_add_op],
         {self.program_count_add_ph: num_programs_from_policy})
 
@@ -942,26 +993,27 @@ class LanguageModel:
           session,
           global_step,
           global_npe,
-          batch_tot_r[s_i],
-          episode_lengths[s_i], test_cases[s_i],
-          code_outputs[s_i], code_strings[s_i], reasons[s_i])
-      reward_summary = self._rl_reward_summary(batch_tot_r)
+          reinforcement.episode_rewards[s_i],
+          reinforcement.episode_lengths[s_i], 
+          reinforcement.episode_code_strings[s_i], 
+          reinforcement.episode_results[s_i])
+      reward_summary = self._rl_reward_summary(reinforcement.episode_rewards)
 
       is_best = False
       if self.global_best_reward_fn:
         # Save best reward.
-        best_reward = np.max(batch_tot_r)
-        is_best = self.global_best_reward_fn(train_context.session, best_reward)
+        best_reward = np.max(reinforcement.episode_rewards)
+        is_best = self.global_best_reward_fn(session, best_reward)
 
-      max_i = np.argmax(batch_tot_r)
-      max_tot_r = batch_tot_r[max_i]
+      max_i = np.argmax(reinforcement.episode_rewards)
+      max_tot_r = reinforcement.episode_rewards[max_i]
       if max_tot_r >= self.top_reward:
         if max_tot_r >= self.top_reward:
           self.top_reward = max_tot_r
-        logger.info('Top code: r=%.2f, \t%s', max_tot_r, code_strings[max_i])
+        logger.info('Top code: r=%.2f, \t%s', max_tot_r, reinforcement.episode_code_strings[max_i])
       if self.top_episodes is not None:
         self.top_episodes.push(
-            max_tot_r, tuple(batch_actions[max_i, :episode_lengths[max_i]]))
+            max_tot_r, tuple(reinforcement.episode_actions[max_i, :reinforcement.episode_lengths[max_i]]))
 
       summaries_list += [text_summary, reward_summary]
 
@@ -974,7 +1026,7 @@ class LanguageModel:
         on_policy_iw = self._compute_iw(on_policy_log_probs, on_policy_weights)
         summaries_list.append(
             self._iw_summary(
-                train_context.session, replay_iw, replay_log_probs, norm_replay_weights,
+                session, replay_iw, replay_log_probs, norm_replay_weights,
                 on_policy_iw, on_policy_log_probs))
 
     return UpdateStepResult(
@@ -982,27 +1034,6 @@ class LanguageModel:
         global_npe=global_npe,
         summaries_list=summaries_list,
         gradients_dict=fetched['gradients'])
-
-
-def io_to_text(io_case, io_type):
-  if isinstance(io_case, misc.IOTuple):
-    # If there are many strings, join them with ','.
-    return ','.join([io_to_text(e, io_type) for e in io_case])
-  if io_type == misc.IOType.string:
-    # There is one string. Return it.
-    return misc.tokens_to_text(io_case)
-  if (io_type == misc.IOType.integer
-      or io_type == misc.IOType.boolean):
-    if len(io_case) == 1:
-      return str(io_case[0])
-    return str(io_case)
-
-
-CodeScoreInfo = namedtuple(
-    'CodeScoreInfo',
-    ['code_strings', 'batch_rewards', 'total_rewards', 'test_cases',
-     'code_outputs', 'reasons'])
-
 
 def process_episodes(
     batch_rewards, episode_lengths, a2c=False, baselines=None,
@@ -1045,7 +1076,8 @@ def process_episodes(
   batch_targets = [None] * num_programs
   for i in xrange(num_programs):
     episode_length = episode_lengths[i]
-    assert len(batch_rewards[i]) == episode_length
+    assertion_str = f'The number of env steps {episode_length} should be equal to the number of rewards {len(batch_rewards[i])}'
+    assert len(batch_rewards[i]) == episode_length, assertion_str
     # Compute target for each timestep.
     # If we are computing A2C:
     #    target_t = advantage_t = R_t - V(c_t)

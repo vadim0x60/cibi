@@ -11,7 +11,7 @@ class ScrumMaster(Agent):
     At the moment, Scrum Master is only able to manage one developer
     """
 
-    def __init__(self, developer, sprint_length=100, coerce_action=lambda x: x):
+    def __init__(self, developer, sprint_length, coerce_action=lambda x: x):
         self.developer = developer
         self.coerce_action = coerce_action
 

@@ -3,8 +3,18 @@ import logging
 import pickle
 import os
 import time
+import numpy as np
+from collections import namedtuple
+
+import utils
+from lm import BF_CHAR_TO_INT
 
 logger = logging.getLogger(__file__)
+
+Reinforcement = namedtuple(
+    'Reinforcement',
+    ['episode_count', 'episode_lengths', 'episode_code_strings', 
+     'episode_actions', 'action_rewards', 'episode_rewards', 'episode_values', 'episode_results'])
 
 def make_initialized_variable(value, name, shape=None, dtype=tf.float32):
   """Create a tf.Variable with a constant initializer.
@@ -25,6 +35,48 @@ def make_initialized_variable(value, name, shape=None, dtype=tf.float32):
   return tf.get_variable(
       name=name, shape=shape, initializer=tf.constant_initializer(value),
       dtype=dtype, trainable=False)
+
+def program_executions_as_rl_episodes(programs):  
+  # We only reward the last character
+  # Everything else is a preparation for dat final punch
+  action_rewards = utils.stack_pad(
+    [[0] * (len(program.code) - 1) + [reward]
+     for program in programs
+     for reward in program.rewards]
+  )
+  episode_rewards = np.array(
+    [reward
+     for program in programs
+     for reward in program.rewards]
+  )
+  episode_lengths = np.array(
+    [len(program.code) 
+     for program in programs
+     for reward in program.rewards]
+  )
+  episode_values = np.array(
+    [program.value_estimate
+     for program in programs
+     for reward in program.rewards]
+  )
+  episode_code_strings = [program.code
+                          for program in programs
+                          for reward in program.rewards]
+  episode_actions = [[BF_CHAR_TO_INT[c] for c in program.code] 
+                     for program in programs
+                     for reward in program.rewards]
+  episode_results = [program.result
+                     for program in programs
+                     for reward in program.rewards]
+  
+  return Reinforcement(episode_count = len(episode_lengths),
+                       episode_lengths=episode_lengths,
+                       action_rewards=action_rewards,
+                       episode_rewards=episode_rewards,
+                       episode_values=episode_values,
+                       episode_code_strings=episode_code_strings,
+                       episode_actions=episode_actions,
+                       episode_results=episode_results)
 
 class Developer(object):
   """Writes code using 2 language models
@@ -204,8 +256,10 @@ class Developer(object):
     """
     session.run(self.sync_op)  # Copy weights from global to local.
 
+    reinforcement = program_executions_as_rl_episodes(programs)
+
     with session.as_default():
-      result = self.model.reflect(session, programs, self.train_op,
+      result = self.model.reflect(session, reinforcement, self.train_op,
           self.global_step)
       global_step = result.global_step
       global_npe = result.global_npe
@@ -310,4 +364,4 @@ class FullStackDeveloper():
     return self.developer.write_programs(self.session)
 
   def reflect(self, programs):
-    return self.reflect(self.session, programs)
+    return self.developer.reflect(self.session, programs)

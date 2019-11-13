@@ -114,6 +114,8 @@ class BrainfuckAgent(Agent):
 
     self.state = State.EXECUTING
 
+    command = None
+
     while self.codeptr < len(self.code):
       command = self.code[self.codeptr]
 
