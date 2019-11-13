@@ -69,7 +69,10 @@ def default_config():
               code_length_bonus=1.0),  # Maximum bonus for short code.
           correct_syntax=False,
       ),
-      batch_size=64,
+      batch_size=4,
+      sprint_length=100,
+      gym_sets=3,
+      gym_reps=10000,
       timestep_limit=32)
 
 

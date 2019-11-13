@@ -60,10 +60,16 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, log_level):
             coerce_action = lambda action: action % env.action_space.n
         else:
             coerce_action = lambda x: x
-        agent = ScrumMaster(FullStackDeveloper(developer, session), coerce_action=coerce_action)
+        agent = ScrumMaster(FullStackDeveloper(developer, session),
+                            sprint_length=config.sprint_length, 
+                            coerce_action=coerce_action)
         env.reset()
-        total_reward = agent.attend_gym(env, reps=10000)
-        logger.info(total_reward)
+        total_reward = 0
+        # Gym sets are not sets in a (data)set sense
+        # These are sets in the gym "sets and reps" sense
+        for s in range(config.gym_sets):
+            total_reward += agent.attend_gym(env, reps=config.gym_reps)
+        logger.info(f'Total reward {total_reward}')
         env.close()
 
     logging.basicConfig()
