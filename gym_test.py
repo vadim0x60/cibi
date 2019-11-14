@@ -3,12 +3,12 @@ from developer import Developer, FullStackDeveloper
 from lm import LanguageModel
 from defaults import default_config_with_updates
 from options import task_launcher
+from metrics import best_reward_window
 
 import tensorflow as tf
 import gym
 import logging
 import os
-
 
 
 @task_launcher
@@ -64,12 +64,15 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, log_level):
                             sprint_length=config.sprint_length, 
                             coerce_action=coerce_action)
         env.reset()
-        total_reward = 0
+
         # Gym sets are not sets in a (data)set sense
         # These are sets in the gym "sets and reps" sense
         for s in range(config.gym_sets):
-            total_reward += agent.attend_gym(env, reps=config.gym_reps)
-        logger.info(f'Total reward {total_reward}')
+            agent.attend_gym(env, reps=config.gym_reps)
+
+        logger.info(agent.rewards)
+        metric = best_reward_window(agent.rewards, window_size=100)
+        logger.info(f'Best 100-reps reward: {metric}')
         env.close()
 
     logging.basicConfig()
