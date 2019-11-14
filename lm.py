@@ -42,8 +42,8 @@ def rshift_time(tensor_2d, fill=BF_EOS_INT):
   fill_tensor = tf.fill([dim_0, 1], fill)
   return tf.concat([fill_tensor, tensor_2d[:, :-1]], axis=1)
 
-UpdateStepResult = namedtuple(
-    'UpdateStepResult',
+ReflectionResult = namedtuple(
+    'ReflectionResult',
     ['global_step', 'global_npe', 'summaries_list', 'gradients_dict'])
 
 def join(a, b):
@@ -721,7 +721,7 @@ class LanguageModel:
           this method call. This is useful for testing.
 
     Returns:
-      Results from the update step in a UpdateStepResult namedtuple, including
+      Results from the update step in a ReflectionResult namedtuple, including
       global step, global NPE, serialized summaries, and optionally gradients.
     """
     assert self.is_local
@@ -1029,7 +1029,7 @@ class LanguageModel:
                 session, replay_iw, replay_log_probs, norm_replay_weights,
                 on_policy_iw, on_policy_log_probs))
 
-    return UpdateStepResult(
+    return ReflectionResult(
         global_step=global_step,
         global_npe=global_npe,
         summaries_list=summaries_list,

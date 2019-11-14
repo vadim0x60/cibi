@@ -241,6 +241,33 @@ class Developer(object):
     with session.as_default():
       return self.model.write_programs(session)
 
+  def _log_reflection_result(self, session, reflection_result):
+    global_step = reflection_result.global_step
+    summaries = reflection_result.summaries_list
+
+    if self.summary_writer and self.local_step % self.summary_interval == 0:
+      if not isinstance(summaries, (tuple, list)):
+        summaries = [summaries]
+      summaries.append(self._local_step_summary())
+      if self.is_chief:
+        (global_best_reward,
+         program_count) = session.run(
+             [self.global_best_reward,
+              self.program_count])
+        summaries.append(
+            tf.Summary(
+                value=[tf.Summary.Value(
+                    tag='model/best_reward',
+                    simple_value=global_best_reward)]))
+        summaries.append(
+            tf.Summary(
+                value=[tf.Summary.Value(
+                    tag='model/program_count',
+                    simple_value=program_count)]))
+      for s in summaries:
+        self.summary_writer.add_summary(s, global_step)
+      self.last_summary_time = time.time()
+
   def reflect(self, session, programs):
     """Run an update step.
 
@@ -263,40 +290,11 @@ class Developer(object):
           self.global_step)
       global_step = result.global_step
       global_npe = result.global_npe
-      summaries = result.summaries_list
     self.cached_global_step = global_step
     self.cached_global_npe = global_npe
     self.local_step += 1
 
-    if self.summary_writer and self.local_step % self.summary_interval == 0:
-      if not isinstance(summaries, (tuple, list)):
-        summaries = [summaries]
-      summaries.append(self._local_step_summary())
-      if self.is_chief:
-        (global_best_reward,
-         found_solution_flag,
-         program_count) = session.run(
-             [self.global_best_reward,
-              self.found_solution_flag,
-              self.program_count])
-        summaries.append(
-            tf.Summary(
-                value=[tf.Summary.Value(
-                    tag='model/best_reward',
-                    simple_value=global_best_reward)]))
-        summaries.append(
-            tf.Summary(
-                value=[tf.Summary.Value(
-                    tag='model/solution_found',
-                    simple_value=int(found_solution_flag))]))
-        summaries.append(
-            tf.Summary(
-                value=[tf.Summary.Value(
-                    tag='model/program_count',
-                    simple_value=program_count)]))
-      for s in summaries:
-        self.summary_writer.add_summary(s, global_step)
-      self.last_summary_time = time.time()
+    self._log_reflection_result(session, result)
 
   def _local_step_summary(self):
     """Compute number of local steps per time increment."""
