@@ -24,12 +24,9 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, log_level):
     events_dir = '%s/events_%d' % (logdir, task_id)
     logger.info('Events directory: %s', events_dir)
 
-    developer = Developer(config, LanguageModel, cycle_program=True)
-
-    variables_to_save = [v for v in tf.global_variables()
-                         if v.name.startswith('global')]
-    global_init_op = tf.variables_initializer(variables_to_save)
-    saver = tf.train.Saver(variables_to_save)
+    developer = Developer(config, LanguageModel, 
+                          cycle_program=True, 
+                          best_checkpoint_file=best_model_checkpoint)
 
     if summary_tasks and task_id < summary_tasks:
         summary_writer = tf.summary.FileWriter(events_dir)
@@ -41,12 +38,12 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, log_level):
 
     sv = tf.train.Supervisor(is_chief=is_chief,
                              logdir=train_dir,
-                             saver=saver,
+                             saver=developer.saver,
                              summary_op=None,
-                             init_op=global_init_op,
+                             init_op=developer.global_init_op,
                              init_fn=init_fn,
                              summary_writer=summary_writer,
-                             ready_op=tf.report_uninitialized_variables(variables_to_save),
+                             ready_op=developer.ready_op,
                              ready_for_local_init_op=None,
                              global_step=developer.global_step,
                              save_model_secs=30,
@@ -70,7 +67,6 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, log_level):
         for s in range(config.gym_sets):
             agent.attend_gym(env, reps=config.gym_reps)
 
-        logger.info(agent.rewards)
         metric = best_reward_window(agent.rewards, window_size=100)
         logger.info(f'Best 100-reps reward: {metric}')
         env.close()

@@ -94,11 +94,17 @@ class Developer(object):
                cycle_program=False,
                summary_interval=1,
                run_number=0,
-               logging_dir='/tmp', model_v=0):
+               logging_dir='/tmp', model_v=0,
+               best_checkpoint_file=None):
     self.batch_size = config.batch_size
     self.task_id = task_id
     self.ps_tasks = ps_tasks
     self.is_chief = is_chief
+
+    if not best_checkpoint_file:
+      self.best_checkpoint_file = os.path.join(logging_dir, 'best.ckpt')
+    else:
+      self.best_checkpoint_file = best_checkpoint_file
 
     if ps_tasks == 0:
       assert task_id == 0, 'No parameter servers specified. Expecting 1 task.'
@@ -228,6 +234,12 @@ class Developer(object):
             '\nLocation: "%s"\nException: %s', self.topk_file, str(e))
         tf.gfile.Remove(self.topk_file)
 
+    variables_to_save = [v for v in tf.global_variables()
+                         if v.name.startswith('global')]
+    self.ready_op = tf.report_uninitialized_variables(variables_to_save)
+    self.global_init_op = tf.variables_initializer(variables_to_save)
+    self.saver = tf.train.Saver(variables_to_save)
+
   def initialize(self, session):
     """Run initialization ops."""
     session.run(self.local_init_op)
@@ -308,11 +320,11 @@ class Developer(object):
             tag='local_step/step',
             simple_value=self.local_step)])
 
-  def maybe_save_best_model(self, session, saver, checkpoint_file):
+  def maybe_save_best_model(self, session):
     """Check if this model got the highest reward and save to disk if so."""
     if self.is_chief and session.run(self.is_best_model):
-      logger.info('Saving best model to "%s"', checkpoint_file)
-      saver.save(session, checkpoint_file)
+      logger.info('Saving best model to "%s"', self.best_checkpoint_file)
+      self.saver.save(session, self.best_checkpoint_file)
       session.run(self.reset_is_best_model)
 
   def save_replay_buffer(self):
