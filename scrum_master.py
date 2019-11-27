@@ -11,10 +11,11 @@ class ScrumMaster(Agent):
     At the moment, Scrum Master is only able to manage one developer
     """
 
-    def __init__(self, developer, sprint_length, coerce_action=lambda x: x):
+    def __init__(self, developer, sprint_length, syntax_error_reward=0, coerce_action=lambda x: x):
         self.developer = developer
         self.coerce_action = coerce_action
 
+        self.syntax_error_reward = syntax_error_reward
         self.sprint_length = sprint_length
         self.sprint_ttl = sprint_length
 
@@ -28,7 +29,7 @@ class ScrumMaster(Agent):
             self.program.input(inp)
         except ProgramFinishedError:
             if self.program.result != Result.SUCCESS:
-                self.reward(0, force_reprogram=True)
+                self.reward(self.syntax_error_reward, force_reprogram=True)
                 self.input(inp)
             else:
                 raise
@@ -39,7 +40,7 @@ class ScrumMaster(Agent):
             return self.coerce_action(action)
         except ProgramFinishedError:
             if self.program.result != Result.SUCCESS:
-                self.reward(0, force_reprogram=True)
+                self.reward(self.syntax_error_reward, force_reprogram=True)
                 return self.act()
             else:
                 raise

@@ -12,7 +12,7 @@ import os
 
 
 @task_launcher
-def run_gym_test(config, task_id, logdir, summary_tasks, master, log_level):
+def run_gym_test(config, task_id, logdir, summary_tasks, master, log_level, num_repetitions):
     config = default_config_with_updates(config)
 
     logging.basicConfig(level=log_level)
@@ -57,19 +57,24 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, log_level):
             coerce_action = lambda action: action % env.action_space.n
         else:
             coerce_action = lambda x: x
-        agent = ScrumMaster(FullStackDeveloper(developer, session),
-                            sprint_length=config.sprint_length, 
-                            coerce_action=coerce_action)
-        env.reset()
 
-        # Gym sets are not sets in a (data)set sense
-        # These are sets in the gym "sets and reps" sense
-        for s in range(config.gym_sets):
-            agent.attend_gym(env, reps=config.gym_reps)
+        min_reward, max_reward = env.reward_range
 
-        metric = best_reward_window(agent.rewards, window_size=100)
-        logger.info(f'Best 100-reps reward: {metric}')
-        env.close()
+        for experiment_idx in range(num_repetitions):
+            agent = ScrumMaster(FullStackDeveloper(developer, session),
+                                sprint_length=config.sprint_length,
+                                syntax_error_reward=min_reward - 1, 
+                                coerce_action=coerce_action)
+            env.reset()
+
+            # Gym sets are not sets in a (data)set sense
+            # These are sets in the gym "sets and reps" sense
+            for s in range(config.gym_sets):
+                agent.attend_gym(env, reps=config.gym_reps)
+
+            metric = best_reward_window(agent.rewards, window_size=100)
+            logger.info(f'Best 100-reps reward: {metric}')
+            env.close()
 
     logging.basicConfig()
 
