@@ -1,5 +1,5 @@
 from agent import Agent
-from bf import ProgramFinishedError, Result
+import bf
 
 class ScrumMaster(Agent):
     """
@@ -11,15 +11,20 @@ class ScrumMaster(Agent):
     At the moment, Scrum Master is only able to manage one developer
     """
 
-    def __init__(self, developer, sprint_length, syntax_error_reward=0, coerce_action=lambda x: x):
+    def __init__(self, developer, env, sprint_length, 
+                 cycle_programs=True, syntax_error_reward=0):
         self.developer = developer
-        self.coerce_action = coerce_action
+        # TODO: config discretization steps
+        self.memory_writer = bf.TuringMemoryWriter(env.observation_space)
+        self.action_sampler = bf.ActionSampler(env.action_space)
+        self.cycle_programs = cycle_programs
 
         self.syntax_error_reward = syntax_error_reward
+
         self.sprint_length = sprint_length
         self.sprint_ttl = sprint_length
 
-        self.programs_for_execution = self.developer.write_programs()
+        self.programs_for_execution = self.make_executables()
         self.program = self.programs_for_execution.pop()
         self.programs_for_reflection = []
         self.rewards = []
@@ -27,8 +32,8 @@ class ScrumMaster(Agent):
     def input(self, inp):
         try:
             self.program.input(inp)
-        except ProgramFinishedError:
-            if self.program.result != Result.SUCCESS:
+        except bf.ProgramFinishedError:
+            if self.program.result != bf.Result.SUCCESS:
                 self.reward(self.syntax_error_reward, force_reprogram=True)
                 self.input(inp)
             else:
@@ -37,9 +42,9 @@ class ScrumMaster(Agent):
     def act(self):
         try:
             action = self.program.act()
-            return self.coerce_action(action)
-        except ProgramFinishedError:
-            if self.program.result != Result.SUCCESS:
+            return action
+        except bf.ProgramFinishedError:
+            if self.program.result != bf.Result.SUCCESS:
                 self.reward(self.syntax_error_reward, force_reprogram=True)
                 return self.act()
             else:
@@ -54,9 +59,19 @@ class ScrumMaster(Agent):
         else:
             self.sprint_ttl = self.sprint_length
 
+    def make_executables(self):
+        # Get the developer to write code
+        programs = self.developer.write_programs()
+
+        # Compile it (might get syntax errors, our developer doesn't check for that)
+        return [program.compile(memory_writer=self.memory_writer, 
+                                action_sampler=self.action_sampler,
+                                cycle=self.cycle_programs) 
+                for program in programs]
+
     def reprogram(self):
         if len(self.programs_for_execution) == 0:
-            self.programs_for_execution = self.developer.write_programs()
+            self.programs_for_execution = self.make_executables()
 
         self.program.rewards = self.rewards
         self.rewards = []

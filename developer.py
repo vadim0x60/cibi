@@ -91,7 +91,6 @@ class Developer(object):
                task_id=0, ps_tasks=0, num_workers=1, is_chief=True,
                summary_writer=None,
                dtype=tf.float32,
-               cycle_program=False,
                summary_interval=1,
                run_number=0,
                logging_dir='/tmp', model_v=0,
@@ -133,7 +132,7 @@ class Developer(object):
                                                   ps_device='/job:ps/replica:0',
                                                   worker_device=worker_device)):
       with tf.variable_scope('global'):
-        global_model = make_language_model(config, dtype=dtype, is_local=False, cycle_program=cycle_program)
+        global_model = make_language_model(config, dtype=dtype, is_local=False)
         global_params_dict = {p.name: p
                               for p in global_model.sync_variables}
         self.global_model = global_model
@@ -177,7 +176,6 @@ class Developer(object):
         self.model = model = make_language_model(
             config,
             logging_file=logging_file,
-            cycle_program=cycle_program,
             experience_replay_file=experience_replay_file,
             dtype=dtype,
             global_best_reward_fn=self.assign_global_best_reward_fn,

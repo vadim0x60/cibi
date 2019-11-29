@@ -12,7 +12,15 @@ Language info: https://en.wikipedia.org/wiki/Brainfuck
 from agent import Agent, ActionError
 
 from collections import namedtuple
+import gym.spaces as s
+import numpy as np
 import time
+
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from dataclasses import dataclass
+else:
+    from pydantic.dataclasses import dataclass
 
 ExecutionSnapshot = namedtuple(
     'ExecutionSnapshot',
@@ -71,12 +79,104 @@ class ProgramFinishedError(ActionError):
     msg = f'Trying to execute a program that has finished with {program_result}'
     super().__init__(msg, program_result)
 
-class BrainfuckAgent(Agent):
-  def __init__(self, code, init_memory=None, base=256, null_value=0,
+class TuringMemoryWriter:
+  def __init__(self, observation_space, discretization_steps=32):
+    if type(observation_space) in (s.Discrete, s.MultiDiscrete, s.MultiBinary):
+      self.discretization_steps = 1
+    elif type(observation_space) == s.Box:
+      self.discretization_steps = discretization_steps
+    else:
+      raise NotImplementedError('Only Discrete, MultiDiscrete, MultiBinary and Box spaces are supported')
+    
+  def discretize(self, value):
+    return int(value * self.discretization_steps)
+    
+  def write(self, memory, cellptr, inp):
+    value_ptr = cellptr
+    for _, value in np.ndenumerate(inp):
+      discrete_value = self.discretize(value)
+
+      # extend or rewrite
+      if value_ptr == len(memory): 
+        memory.append(discrete_value)
+      else:
+        memory[value_ptr] = discrete_value
+      value_ptr += 1
+
+class ActionSampler:
+  def __init__(self, action_space, discretization_steps=32):
+    space_type = type(action_space)
+    self.sample_shape = action_space.shape
+    self.discretization_steps = discretization_steps
+
+    if space_type == s.Discrete:
+      self.lower_bound = 0
+      self.upper_bound = action_space.n - 1
+      self.bounded_below = True
+      self.bounded_above = True
+
+      # Optional, but mapping 0-15 to 0 and 16-31 to 1 
+      # in a binary case is an unnecessary complication
+      # So let's not
+      self.discretization_steps = action_space.n
+
+    elif space_type == s.MultiDiscrete:
+      self.upper_bound = action_space.nvec
+      self.lower_bound = np.zeros_like(self.upper_bound)
+      self.bounded_above = np.ones_like(self.upper_bound)
+      self.bounded_below = np.ones_like(self.lower_bound)
+
+    elif space_type == s.MultiBinary:
+      self.lower_bound = np.zeros(action_space.n)
+      self.upper_bound = np.ones(action_space.n)
+      self.bounded_above = np.ones_like(self.upper_bound)
+      self.bounded_below = np.ones_like(self.lower_bound)
+
+    elif space_type == s.Box:
+      self.lower_bound = action_space.lower_bound
+      self.upper_bound = action_space.upper_bound
+      self.bounded_above = action_space.bounded_above
+      self.bounded_below = action_space.bounded_below
+
+    else:
+      raise NotImplementedError('Only Discrete, MultiDiscrete, MultiBinary and Box spaces are supported')
+
+  def undiscretize(self, discrete_actions):
+    double_bounded = self.bounded_below * self.bounded_above
+    unbounded = (1 - self.bounded_below) * (1 - self.bounded_above)
+
+    actions = double_bounded * np.mod(discrete_actions, self.discretization_steps)
+    actions += self.bounded_below * self.lower_bound
+    actions += self.bounded_above * (1 - self.bounded_below) * self.upper_bound
+    actions += (self.bounded_below - self.bounded_above) * np.abs(actions)
+    actions += unbounded * actions
+
+    return actions
+
+  def sample(self, action_stack):
+    sample_size = int(np.prod(self.sample_shape))
+
+    # like pop(), but for many elements
+    sample = action_stack[-sample_size:]
+    del action_stack[-sample_size:]
+
+    if sample_size == 1:
+      sample = sample[0]
+    else:
+      sample = np.array(sample).reshape(self.sample_shape)
+
+    return self.undiscretize(sample)
+    
+class Executable(Agent):
+  def __init__(self, code, memory_writer, action_sampler,
+               init_memory=None, base=256, null_value=0,
                max_steps=2 ** 20, require_correct_syntax=True, debug=False,
                cycle = False):
     code = list(code)
     self.bracemap, correct_syntax = buildbracemap(code)  # will modify code list
+
+    self.memory_writer = memory_writer
+    self.action_sampler = action_sampler
 
     self.code = code
     self.max_steps = max_steps
@@ -171,13 +271,31 @@ class BrainfuckAgent(Agent):
     self.state = State.EXECUTING
     self.record_snapshot(',')
 
-    self.cells[self.cellptr] = inp
+    self.memory_writer.write(self.cells, self.cellptr, inp)
 
     self.codeptr += 1
     self.steps += 1
 
   def act(self):
     try:
-      return self.action_stack.pop()
+      return self.action_sampler.sample(self.action_stack)
     except IndexError:
       return self.null_value
+
+@dataclass
+class Program:
+    code = ""
+    log_probs = None
+    value_estimate = None
+    cycle = False
+
+    def compile(self, *args, **kwargs):
+        executable = Executable(self.code, *args, **kwargs)
+        executable.log_probs = self.log_probs
+        executable.value_estimate = self.value_estimate
+        return executable
+
+    def __init__(self, code, log_probs=None, value_estimate=None):
+      self.code = code
+      self.log_probs = log_probs
+      self.value_estimate = value_estimate

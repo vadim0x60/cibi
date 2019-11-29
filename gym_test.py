@@ -10,6 +10,7 @@ import gym
 import logging
 import os
 
+from sepsis import SepsisEnv
 
 @task_launcher
 def run_gym_test(config, task_id, logdir, summary_tasks, master, log_level, num_repetitions):
@@ -25,7 +26,6 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, log_level, num_
     logger.info('Events directory: %s', events_dir)
 
     developer = Developer(config, LanguageModel, 
-                          cycle_program=True, 
                           best_checkpoint_file=best_model_checkpoint)
 
     if summary_tasks and task_id < summary_tasks:
@@ -35,6 +35,8 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, log_level, num_
 
     def init_fn(unused_sess):
         logger.info('No checkpoint found. Initialized global params.')
+
+    env = SepsisEnv()
 
     sv = tf.train.Supervisor(is_chief=is_chief,
                              logdir=train_dir,
@@ -50,21 +52,13 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, log_level, num_
                              save_summaries_secs=30)
 
     with sv.managed_session(master) as session:
-        developer.initialize(session)
-
-        env = gym.make('NChain-v0')
-        if type(env.action_space) == gym.spaces.Discrete:
-            coerce_action = lambda action: action % env.action_space.n
-        else:
-            coerce_action = lambda x: x
-
-        min_reward, max_reward = env.reward_range
+        developer.initialize(session)   
 
         for experiment_idx in range(num_repetitions):
-            agent = ScrumMaster(FullStackDeveloper(developer, session),
+            agent = ScrumMaster(FullStackDeveloper(developer, session), env,
+                                cycle_programs=True,
                                 sprint_length=config.sprint_length,
-                                syntax_error_reward=min_reward - 1, 
-                                coerce_action=coerce_action)
+                                syntax_error_reward=config.syntax_error_reward)
             env.reset()
 
             # Gym sets are not sets in a (data)set sense

@@ -129,7 +129,6 @@ class LanguageModel:
                global_best_reward_fn=None,
                program_count=None,
                do_iw_summaries=False,
-               cycle_program=False,
                dtype=tf.float32,
                verbose_level=0,
                is_local=True):
@@ -141,7 +140,6 @@ class LanguageModel:
     self.parent_scope_name = tf.get_variable_scope().name
     self.dtype = dtype
     self.allow_eos_token = config.eos_token
-    self.cycle_program = cycle_program
     self.pi_loss_hparam = config.pi_loss_hparam
     self.vf_loss_hparam = config.vf_loss_hparam
     self.is_local = is_local
@@ -694,13 +692,7 @@ class LanguageModel:
 
       logger.info(f'Wrote program: {code}')
 
-      if self.cycle_program:
-        program = bf.BrainfuckAgent(code, cycle=True, max_steps=None)
-      else:
-        program = bf.BrainfuckAgent(code, cycle=False)
-
-      program.log_probs = action_log_probs
-      program.value_estimate = value_estimate
+      program = bf.Program(code, log_probs=log_probs, value_estimate=value_estimate)
       programs.append(program)
 
     return programs

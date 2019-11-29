@@ -6,7 +6,14 @@ from __future__ import print_function
 
 import tensorflow as tf
 import bf  # brain coder
-from bf import BrainfuckAgent, ProgramFinishedError
+import gym.spaces as s
+from bf import Executable, ProgramFinishedError
+
+action_space = s.Discrete(1024)
+observation_space = s.Discrete(1024)
+
+memory_writer = bf.TuringMemoryWriter(observation_space)
+action_sampler = bf.ActionSampler(action_space)
 
 def shorten(seq, size_limit=20, head_size=5, tail_size=5):
   if len(seq) < size_limit:
@@ -14,7 +21,7 @@ def shorten(seq, size_limit=20, head_size=5, tail_size=5):
   else:
     return seq[:head_size] + ['...'] + seq[-tail_size:]
 
-def evaluate(*args, **kwargs):
+def evaluate(code, **kwargs):
   """Adapter between our agent approach and Google's seq2seq approach"""
 
   try:
@@ -27,7 +34,7 @@ def evaluate(*args, **kwargs):
     # This are unit tests! Debug mode on by default
     kwargs['debug'] = True
 
-  agent = BrainfuckAgent(*args, **kwargs)
+  agent = Executable(code, memory_writer=memory_writer, action_sampler=action_sampler, **kwargs)
 
   for x in input_buffer:
     agent.input(x)

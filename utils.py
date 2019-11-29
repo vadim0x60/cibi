@@ -18,6 +18,14 @@ import tensorflow as tf
 import logging
 logger = logging.getLogger(__file__)
 
+def with_graph(graph):
+  def with_this_graph(method):
+    @functools.wraps(method)
+    def execute_with_graph():
+      with graph.as_default():
+        return method()
+    return execute_with_graph
+  return with_this_graph
 
 def tuple_to_record(tuple_, record_type):
   return record_type(**dict(zip(record_type.__slots__, tuple_)))
