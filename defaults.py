@@ -74,6 +74,7 @@ def default_config():
       syntax_error_reward=0,
       gym_sets=10,
       gym_reps=10000,
+      render=False,
       timestep_limit=32)
 
 

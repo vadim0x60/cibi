@@ -93,17 +93,11 @@ class Developer(object):
                dtype=tf.float32,
                summary_interval=1,
                run_number=0,
-               logging_dir='/tmp', model_v=0,
-               best_checkpoint_file=None):
+               logging_dir='/tmp', model_v=0):
     self.batch_size = config.batch_size
     self.task_id = task_id
     self.ps_tasks = ps_tasks
     self.is_chief = is_chief
-
-    if not best_checkpoint_file:
-      self.best_checkpoint_file = os.path.join(logging_dir, 'best.ckpt')
-    else:
-      self.best_checkpoint_file = best_checkpoint_file
 
     if ps_tasks == 0:
       assert task_id == 0, 'No parameter servers specified. Expecting 1 task.'
@@ -318,13 +312,6 @@ class Developer(object):
             tag='local_step/step',
             simple_value=self.local_step)])
 
-  def maybe_save_best_model(self, session):
-    """Check if this model got the highest reward and save to disk if so."""
-    if self.is_chief and session.run(self.is_best_model):
-      logger.info('Saving best model to "%s"', self.best_checkpoint_file)
-      self.saver.save(session, self.best_checkpoint_file)
-      session.run(self.reset_is_best_model)
-
   def save_replay_buffer(self):
     """Save replay buffer to disk.
 
@@ -357,15 +344,17 @@ class Developer(object):
       with tf.gfile.FastGFile(self.topk_file, 'w') as f:
         f.write(pickle.dumps(self.model.top_episodes))
 
-class FullStackDeveloper():
+def init_fn(unused_sess):
+  logger.info('No checkpoint found. Initialized global params.')
+
+class EmployedDeveloper():
   """
-  A developer that knows their Tensorflow session so that 
-  you don't have to hold their hand while they're coding
+  A developer with an active Tensorflow session
   """
 
-  def __init__(self, developer, session):
+  def __init__(self, developer, session_manager):
     self.developer = developer
-    self.session = session
+    self.session_manager = session_manager
     self.batch_size = developer.batch_size
 
   def write_programs(self):
@@ -373,3 +362,30 @@ class FullStackDeveloper():
 
   def reflect(self, programs):
     return self.developer.reflect(self.session, programs)
+
+  def __enter__(self):
+    self.session = self.session_manager.__enter__()
+    self.developer.initialize(self.session)
+    return self 
+
+  def __exit__(self, type, value, tb):
+    self.session_manager.__exit__(type, value, tb)
+    self.session = None
+
+def hire(developer, log_dir, events_dir=None, is_chief=True):
+  summary_writer = tf.summary.FileWriter(events_dir) if events_dir else None
+
+  sv = tf.train.Supervisor( is_chief=is_chief,
+                            logdir=log_dir,
+                            saver=developer.saver,
+                            summary_op=None,
+                            init_op=developer.global_init_op,
+                            init_fn=init_fn,
+                            summary_writer=summary_writer,
+                            ready_op=developer.ready_op,
+                            ready_for_local_init_op=None,
+                            global_step=developer.global_step,
+                            save_model_secs=30,
+                            save_summaries_secs=30)
+
+  return EmployedDeveloper(developer, sv.managed_session())
