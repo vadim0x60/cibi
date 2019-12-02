@@ -1,5 +1,6 @@
 import logging
 logger = logging.getLogger(__file__)
+import itertools
 
 class ActionError(Exception):
     """This agent cannot act at the moment"""
@@ -17,32 +18,36 @@ class Agent():
     def reward(self, reward):
         pass
 
-    def attend_gym(self, env, reps=1000):
+    def attend_gym(self, env, max_reps=1000, render=True):
         total_reward = 0
 
         try:
             observation = env.reset()
-            self.input(observation)
-            
-            for _ in range(reps):
-                try:
-                    env.render()  
-                except NotImplementedError:
-                    pass
+            rng = range(max_reps) if max_reps else itertools.count()
+
+            for _ in rng:
+                self.input(observation)
+
+                if render:
+                    try:
+                        env.render()  
+                    except NotImplementedError:
+                        render = False
                     
                 action = self.act()
 
                 observation, reward, done, info = env.step(action)
-                total_reward += reward
-                logger.info(f'Got reward {reward}')
 
+                logger.info(f'Got reward {reward}')
+                total_reward += reward
                 self.reward(reward)
-                self.input(observation)
 
                 if done:
-                    observation = env.reset()
-                env.close()
+                    break
+                
         except ActionError as e:
             logger.warn(f'Gym training finished prematurely: {e}')
+
+        env.close()
 
         return total_reward
