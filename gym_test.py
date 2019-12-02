@@ -32,7 +32,7 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, log_level, num_
 
     env = SepsisEnv()
 
-    with hire(developer, log_dir=logdir, events_dir=events_dir, is_chief=is_chief) as employed_developer:
+    with hire(developer, log_dir=train_dir, events_dir=events_dir, is_chief=is_chief) as employed_developer:
         agent = ScrumMaster(employed_developer, env,
                             cycle_programs=True,
                             sprint_length=config.sprint_length,
