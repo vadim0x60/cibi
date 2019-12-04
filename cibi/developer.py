@@ -6,10 +6,10 @@ import time
 import numpy as np
 from collections import namedtuple
 
-import utils
-from lm import BF_CHAR_TO_INT
+from cibi import utils
+from cibi.lm import BF_CHAR_TO_INT
 
-logger = logging.getLogger(__file__)
+logger = logging.getLogger(f'bff.{__file__}')
 
 Reinforcement = namedtuple(
     'Reinforcement',

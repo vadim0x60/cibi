@@ -9,7 +9,7 @@ Language info: https://en.wikipedia.org/wiki/Brainfuck
 + ! to write to the beginning of the stack
 """
 
-from agent import Agent, ActionError
+from cibi.agent import Agent, ActionError
 
 from collections import namedtuple
 import gym.spaces as s

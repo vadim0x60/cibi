@@ -1,8 +1,9 @@
-# BFF - BrainFuck Forever
+# Cibi
 
-__tl;dr__: rnn + brainfuck + scrum = AI superpower
+[Cibi](https://en.wikipedia.org/wiki/Cibi) is a war dance that Fijian rugby team performs before it gets into a [scrum](https://en.wikipedia.org/wiki/Scrum_(rugby)) and defeats its opponents.
 
-A flexible framework for reinforcement learning that puts together:
+This package doesn't perform any war dances (yet), but it can defeat most OpenAI gym environments using:
+
 - [Neural Program Synthesis with Priority Queue Training](https://arxiv.org/abs/1801.03526)
 - Principles of [Scrum](https://www.scrum.org/resources/scrum-framework-poster)
 - A slightly extended version of [Brainfuck language](https://en.wikipedia.org/wiki/Brainfuck)

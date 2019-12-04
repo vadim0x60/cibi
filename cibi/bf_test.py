@@ -5,9 +5,9 @@ from __future__ import print_function
 """Tests for common.bf."""
 
 import tensorflow as tf
-import bf  # brain coder
 import gym.spaces as s
-from bf import Executable, ProgramFinishedError
+from cibi import bf  # brain coder
+from cibi.bf import Executable, ProgramFinishedError
 
 action_space = s.Discrete(1024)
 observation_space = s.Discrete(1024)

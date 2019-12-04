@@ -1,5 +1,5 @@
-from agent import Agent
-import bf
+from cibi.agent import Agent
+from cibi import bf
 
 class ScrumMaster(Agent):
     """

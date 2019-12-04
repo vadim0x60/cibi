@@ -12,7 +12,7 @@ import ast
 import itertools
 from six.moves import xrange
 
-from utils import first
+from cibi.utils import first
 
 
 class Config(dict):

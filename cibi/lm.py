@@ -9,21 +9,19 @@ as a language model or using RL, or a combination of the two.
 """
 
 from collections import namedtuple
-from math import exp
-from math import log
+from math import exp, log
 import time
 
 import numpy as np
 from six.moves import xrange
 import tensorflow as tf
 
-import rollout as rollout_lib  # brain coder
-import utils
+import cibi.rollout as rollout_lib  # brain coder
+from cibi import utils
+from cibi import bf
 
 import logging
-logger = logging.getLogger(__file__)
-
-import bf
+logger = logging.getLogger(f'bff.{__file__}')
 
 # Experiments in the ICLR 2018 paper used reduce_sum instead of reduce_mean for
 # some losses. We make all loses be batch_size independent, and multiply the

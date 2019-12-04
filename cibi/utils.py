@@ -16,7 +16,7 @@ from six.moves import xrange
 import tensorflow as tf
 
 import logging
-logger = logging.getLogger(__file__)
+logger = logging.getLogger(f'bff.{__file__}')
 
 def with_graph(graph):
   def with_this_graph(method):

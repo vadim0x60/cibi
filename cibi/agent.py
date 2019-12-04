@@ -1,5 +1,5 @@
 import logging
-logger = logging.getLogger(__file__)
+logger = logging.getLogger(f'bff.{__file__}')
 import itertools
 
 class ActionError(Exception):
