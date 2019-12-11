@@ -4,3 +4,4 @@ tensorflow==1.*
 six==1.*
 gym==0.*
 click==7.*
+git+git://github.com/akiani/gym-sepsis

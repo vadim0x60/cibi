@@ -3,7 +3,6 @@ from cibi.developer import Developer, hire
 from cibi.lm import LanguageModel
 from cibi.defaults import default_config_with_updates
 from cibi.options import task_launcher
-from cibi.metrics import best_reward_window
 
 import tensorflow as tf
 import numpy as np
@@ -52,6 +51,7 @@ def SepsisEnv():
 def run_gym_test(config, task_id, logdir, summary_tasks, master, log_level, num_repetitions):
     config = default_config_with_updates(config)
 
+    os.makedirs(logdir, exist_ok = True)
     parent_logger = logging.getLogger('bff')
     parent_logger.setLevel(log_level)
     parent_logger.addHandler(logging.FileHandler(f'{logdir}/log.log'))

@@ -17,10 +17,6 @@ import numpy as np
 import time
 
 from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from dataclasses import dataclass
-else:
-    from pydantic.dataclasses import dataclass
 
 ExecutionSnapshot = namedtuple(
     'ExecutionSnapshot',
@@ -174,6 +170,11 @@ class Executable(Agent):
                cycle = False):
     code = list(code)
     self.bracemap, correct_syntax = buildbracemap(code)  # will modify code list
+    if len(code) == 0:
+      # Empty programs are a very easy way for a lazy-bum developer
+      # to avoid negative reinforcement for syntax errors
+      # Not so fast, lazy-bum developers
+      correct_syntax = False
 
     self.memory_writer = memory_writer
     self.action_sampler = action_sampler
@@ -282,7 +283,6 @@ class Executable(Agent):
     except IndexError:
       return self.null_value
 
-@dataclass
 class Program:
     code = ""
     log_probs = None
