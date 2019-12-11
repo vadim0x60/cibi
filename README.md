@@ -10,3 +10,5 @@ This package doesn't perform any war dances (yet), but it can defeat most [OpenA
 - [Action stacks](https://boardgamegeek.com/boardgamemechanic/2689/action-queue)
 
 Some code is blatantly copied and pasted from [Google's Brain Coder](https://github.com/tensorflow/models/tree/master/research/brain_coder) which is permitted by [Apache License](LICENSE)
+
+See `experiments` folder for example usage
