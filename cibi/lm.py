@@ -750,6 +750,7 @@ class LanguageModel:
           'summaries': self.rl_summary_op,
           'train_op': train_op,
           'gradients': self.gradients_dict if return_gradients else self.no_op}
+
       fetched = session.run(
           fetches,
           {self.actions: reinforcement.episode_actions,
@@ -1066,8 +1067,6 @@ def process_episodes(
   batch_targets = [None] * num_programs
   for i in xrange(num_programs):
     episode_length = episode_lengths[i]
-    assertion_str = f'The number of env steps {episode_length} should be equal to the number of rewards {len(batch_rewards[i])}'
-    assert len(batch_rewards[i]) == episode_length, assertion_str
     # Compute target for each timestep.
     # If we are computing A2C:
     #    target_t = advantage_t = R_t - V(c_t)
@@ -1081,7 +1080,7 @@ def process_episodes(
       # Compute advantage.
       assert batch_values is not None
       episode_values = batch_values[i, :episode_length]
-      episode_rewards = batch_rewards[i]
+      episode_rewards = batch_rewards[i, :episode_length]
       emp_val, gen_adv = rollout_lib.discounted_advantage_and_rewards(
           episode_rewards, episode_values, gamma=1.0, lambda_=1.0)
       batch_returns[i] = emp_val
@@ -1090,7 +1089,7 @@ def process_episodes(
       # Compute return for each timestep. See section 3 of
       # https://arxiv.org/pdf/1602.01783.pdf
       assert baselines is not None
-      empirical_returns = rollout_lib.discount(batch_rewards[i], gamma=1.0)
+      empirical_returns = rollout_lib.discount(batch_rewards[i, :episode_length], gamma=1.0)
       targets = [None] * episode_length
       for j in xrange(episode_length):
         targets[j] = empirical_returns[j] - baselines[j]

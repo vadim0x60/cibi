@@ -42,8 +42,10 @@ def program_executions_as_rl_episodes(programs):
   action_rewards = utils.stack_pad(
     [[0] * (len(program.code) - 1) + [reward]
      for program in programs
-     for reward in program.rewards]
+     for reward in program.rewards],
+     pad_axes=0
   )
+  action_rewards = np.array(action_rewards)
   episode_rewards = np.array(
     [reward
      for program in programs
@@ -62,9 +64,12 @@ def program_executions_as_rl_episodes(programs):
   episode_code_strings = [program.code
                           for program in programs
                           for reward in program.rewards]
-  episode_actions = [[BF_CHAR_TO_INT[c] for c in program.code] 
+  episode_actions = utils.stack_pad(
+                    [[BF_CHAR_TO_INT[c] for c in program.code] 
                      for program in programs
-                     for reward in program.rewards]
+                     for reward in program.rewards], 
+                     pad_axes=0)
+  episode_actions = np.array(episode_actions)
   episode_results = [program.result
                      for program in programs
                      for reward in program.rewards]

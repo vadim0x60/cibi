@@ -42,7 +42,7 @@ def default_config():
               # reached. e.g. True means variable length code, False means fixed
               # length code.
               # WARNING: Making this false slows things down.
-              eos_token=False,
+              eos_token=True,
               replay_temperature=1.0,
               # Replay probability. 1 = always replay, 0 = always on policy.
               alpha=0.0,
@@ -74,10 +74,11 @@ def default_config():
       gym_sets=10,
       gym_reps=10000,
       render=False,
-      timestep_limit=32)
+      timestep_limit=256)
 
 
 def default_config_with_updates(config_string, do_logging=True):
+  print(config_string)
   if do_logging:
     logger.info('Config string: "%s"', config_string)
   config = default_config()
