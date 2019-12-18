@@ -34,7 +34,7 @@ class State(object):
   AWAITING_INPUT = 'awaiting-input'
   FINISHED = 'finished'
 
-CHARS = ['>', '<', '+', '-', '[', ']', '.', ',', '!', '0']
+CHARS = ['>', '<', '^', '+', '-', '[', ']', '.', ',', '!', '0']
 BF_EOS_INT = 0  # Also used as SOS (start of sequence).
 BF_EOS_CHAR = TEXT_EOS_CHAR = '_'
 BF_INT_TO_CHAR = [BF_EOS_CHAR] + CHARS
@@ -258,6 +258,9 @@ class Executable(Agent):
 
     if command == '<':
       self.cellptr = 0 if self.cellptr <= 0 else self.cellptr - 1
+
+    if command == '^':
+      self.cellptr = 0
 
     if command == '+':
       self.cells[self.cellptr] = self.cells[self.cellptr] + 1 if self.cells[self.cellptr] < (self.base - 1) else 0
