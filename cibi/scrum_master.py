@@ -10,7 +10,7 @@ Reinforcement = namedtuple(
     ['episode_count', 'episode_lengths', 'episode_code_strings', 
      'episode_actions', 'action_rewards', 'episode_rewards', 'episode_values', 'episode_results'])
 
-def programs_as_rl_episodes(programs):  
+def programs_as_rl_episodes(programs): 
   episode_rewards = np.array(
     [sum(program.rewards)
      for program in programs]

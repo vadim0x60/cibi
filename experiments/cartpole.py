@@ -49,7 +49,7 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, log_level, num_
             agent = ScrumMaster(employed_developer, env,
                                 cycle_programs=True,
                                 sprint_length=config.sprint_length,
-                                syntax_error_reward=config.syntax_error_reward)
+                                syntax_error_reward=0)
 
             for s in range(config.gym_sets):
                 rollout = agent.attend_gym(env, max_reps=config.gym_reps, render=config.render)
