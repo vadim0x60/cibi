@@ -19,6 +19,7 @@ import tensorflow as tf
 import cibi.rollout as rollout_lib  # brain coder
 from cibi import utils
 from cibi import bf
+from cibi.bf import BF_EOS_INT, BF_EOS_CHAR, BF_INT_TO_CHAR, BF_CHAR_TO_INT
 
 import logging
 logger = logging.getLogger(f'bff.{__file__}')
@@ -28,11 +29,6 @@ logger = logging.getLogger(f'bff.{__file__}')
 # changed losses by 64, which was the fixed batch_size when the experiments
 # where run. The loss hyperparameters still match what is reported in the paper.
 MAGIC_LOSS_MULTIPLIER = 64
-
-BF_EOS_INT = 0  # Also used as SOS (start of sequence).
-BF_EOS_CHAR = TEXT_EOS_CHAR = '_'
-BF_INT_TO_CHAR = [BF_EOS_CHAR] + bf.CHARS
-BF_CHAR_TO_INT = dict([(c, i) for i, c in enumerate(BF_INT_TO_CHAR)])
 
 def rshift_time(tensor_2d, fill=BF_EOS_INT):
   """Right shifts a 2D tensor along the time dimension (axis-1)."""
@@ -687,6 +683,8 @@ class LanguageModel:
         batch_actions, batch_values, episode_lengths, log_probs
       ):
       code = ''.join([BF_INT_TO_CHAR[a] for a in actions[:episode_length]])
+      if code[-1] == BF_EOS_CHAR:
+        code = code[:-1]
 
       logger.info(f'Wrote program: {code}')
 
@@ -964,7 +962,7 @@ class LanguageModel:
 
     # Update EMA baselines on the mini-batch which we just did traning on.
     if not self.a2c:
-      for i in xrange(self.batch_size):
+      for i in xrange(reinforcement.episode_count):
         episode_length = combined_adjusted_lengths[i]
         empirical_returns = combined_returns[i, :episode_length]
         for j in xrange(episode_length):

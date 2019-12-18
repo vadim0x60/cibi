@@ -2,6 +2,8 @@ import logging
 logger = logging.getLogger(f'bff.{__file__}')
 import itertools
 
+from cibi.rollout import Rollout
+
 class ActionError(Exception):
     """This agent cannot act at the moment"""
     def __init__(self, message='This agent cannot act at the moment', details=None):
@@ -15,11 +17,22 @@ class Agent():
     def act(self):
         raise NotImplementedError
 
+    def value(self):
+        """Ask the agent how it's doing. Quantitative estimates only"""
+        return 0
+
     def reward(self, reward):
         pass
 
+    def init(self):
+        raise NotImplementedError
+
+    def done(self):
+        raise NotImplementedError
+
     def attend_gym(self, env, max_reps=1000, render=True):
-        total_reward = 0
+        rollout = Rollout()
+        self.init()
 
         try:
             observation = env.reset()
@@ -35,11 +48,9 @@ class Agent():
                         render = False
                     
                 action = self.act()
-
+                prev_observation = observation
                 observation, reward, done, info = env.step(action)
-
-                logger.info(f'Got reward {reward}')
-                total_reward += reward
+                rollout.add(prev_observation, action, reward, self.value(), done)
                 self.reward(reward)
 
                 if done:
@@ -48,6 +59,7 @@ class Agent():
         except ActionError as e:
             logger.warn(f'Gym training finished prematurely: {e}')
 
+        self.done()
         env.close()
 
-        return total_reward
+        return rollout

@@ -575,3 +575,20 @@ def first(coll):
     return coll[0]
   except TypeError:
     return next(iter(coll))
+
+def alternative_names(name):
+    alternative = name
+    while True:
+        alternative = '_' + alternative
+        yield alternative
+
+def get_dir_out_of_the_way(path):
+    import os
+    import shutil
+
+    parent, child = os.path.split(path)
+    for alternative_name in alternative_names(child):
+        alternative_path = os.path.join(parent, alternative_name)
+        if not os.path.exists(alternative_path):
+            shutil.move(path, alternative_path)
+            break

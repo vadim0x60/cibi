@@ -123,6 +123,13 @@ class Rollout(object):
     self.terminated = other.terminated
     self.total_reward += other.total_reward
 
+  def __len__(self):
+    count = len(self.states)
+    assert count == len(self.actions)
+    assert count == len(self.states)
+    assert count == len(self.values)
+    return count
+
 
 def discount(x, gamma):
   """Returns discounted sums for each value in x, with discount factor gamma.

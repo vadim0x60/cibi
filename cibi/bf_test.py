@@ -149,8 +149,7 @@ class BfTest(tf.test.TestCase):
          es(codeptr=4, codechar=',', memptr=2, memval=0, memory=[2, 1, 0], action_stack=[0, 1, 2], state='awaiting-input'), 
          es(codeptr=4, codechar=',', memptr=2, memval=0, memory=[2, 1, 0], action_stack=[0, 1, 2], state='executing'), 
          es(codeptr=5, codechar=']', memptr=2, memval=0, memory=[2, 1, 0], action_stack=[0, 1, 2], state='executing'), 
-         es(codeptr=6, codechar='.', memptr=2, memval=0, memory=[2, 1, 0], action_stack=[0, 1, 2], state='executing'), 
-         es(codeptr=7, codechar='.', memptr=2, memval=0, memory=[2, 1, 0], action_stack=[0, 1, 2], state='executing')],
+         es(codeptr=6, codechar='.', memptr=2, memval=0, memory=[2, 1, 0], action_stack=[0, 1, 2], state='executing')],
         agent.program_trace)
 
 

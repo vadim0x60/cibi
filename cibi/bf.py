@@ -26,6 +26,7 @@ class Result(object):
   SUCCESS = 'success'
   STEP_LIMIT = 'step-limit'
   SYNTAX_ERROR = 'syntax-error'
+  KILLED = 'killed'
 
 class State(object):
   NOT_STARTED = 'not-started'
@@ -33,8 +34,11 @@ class State(object):
   AWAITING_INPUT = 'awaiting-input'
   FINISHED = 'finished'
 
-CHARS = INT_TO_CHAR = ['>', '<', '+', '-', '[', ']', '.', ',', '!', '0']
-CHAR_TO_INT = dict([(c, i) for i, c in enumerate(INT_TO_CHAR)])
+CHARS = ['>', '<', '+', '-', '[', ']', '.', ',', '!', '0']
+BF_EOS_INT = 0  # Also used as SOS (start of sequence).
+BF_EOS_CHAR = TEXT_EOS_CHAR = '_'
+BF_INT_TO_CHAR = [BF_EOS_CHAR] + CHARS
+BF_CHAR_TO_INT = dict([(c, i) for i, c in enumerate(BF_INT_TO_CHAR)])
 
 def buildbracemap(code):
   """Build jump map.
@@ -71,8 +75,8 @@ def buildbracemap(code):
   return bracemap, correct_syntax
 
 class ProgramFinishedError(ActionError):
-  def __init__(self, program_result):
-    msg = f'Trying to execute a program that has finished with {program_result}'
+  def __init__(self, code, program_result):
+    msg = f'Trying to execute program {code} that has finished with {program_result}'
     super().__init__(msg, program_result)
 
 class TuringMemoryWriter:
@@ -168,6 +172,7 @@ class Executable(Agent):
                init_memory=None, base=256, null_value=0,
                max_steps=2 ** 20, require_correct_syntax=True, debug=False,
                cycle = False):
+    self.code = code
     code = list(code)
     self.bracemap, correct_syntax = buildbracemap(code)  # will modify code list
     if len(code) == 0:
@@ -176,23 +181,28 @@ class Executable(Agent):
       # Not so fast, lazy-bum developers
       correct_syntax = False
 
+    self.is_valid = correct_syntax or not require_correct_syntax
+
     self.memory_writer = memory_writer
     self.action_sampler = action_sampler
-
-    self.code = code
+    
+    self.init_memory = init_memory
     self.max_steps = max_steps
     self.debug = debug
     self.base = base
     self.null_value = null_value
     self.cycle = cycle
 
-    self.program_trace = [] if debug else None
+    self.init()
+
+  def init(self):
+    self.program_trace = [] if self.debug else None
     self.codeptr, self.cellptr = 0, 0
     self.steps = 0
-    self.cells = list(init_memory) if init_memory else [0]
+    self.cells = list(self.init_memory) if self.init_memory else [0]
     self.action_stack = []
 
-    if require_correct_syntax and not correct_syntax:
+    if not self.is_valid:
       self.state = State.FINISHED
       self.result = Result.SYNTAX_ERROR
     else:
@@ -207,63 +217,76 @@ class Executable(Agent):
           memval=self.cells[self.cellptr], memory=list(self.cells),
           state=self.state, action_stack=self.action_stack))
 
-  def execute(self):
+  def value(self):
+    return self.value_estimate
+
+  def done(self):
+    if self.state != State.FINISHED:
+      self.state = State.FINISHED
+      self.result = Result.KILLED
+
+  def step(self):
     if self.state == State.FINISHED:
-      raise ProgramFinishedError(self.result)
+      raise ProgramFinishedError(self.code, self.result)
     if self.state == State.AWAITING_INPUT:
       return
 
     self.state = State.EXECUTING
 
-    command = None
+    if self.max_steps is not None and self.steps >= self.max_steps:
+      self.result = Result.STEP_LIMIT
+      self.state = State.FINISHED
+      return
 
-    while self.codeptr < len(self.code):
-      command = self.code[self.codeptr]
-
-      self.record_snapshot(command)
-
-      if command == '>':
-        self.cellptr += 1
-        if self.cellptr == len(self.cells): self.cells.append(self.null_value)
-
-      if command == '<':
-        self.cellptr = 0 if self.cellptr <= 0 else self.cellptr - 1
-
-      if command == '+':
-        self.cells[self.cellptr] = self.cells[self.cellptr] + 1 if self.cells[self.cellptr] < (self.base - 1) else 0
-
-      if command == '-':
-        self.cells[self.cellptr] = self.cells[self.cellptr] - 1 if self.cells[self.cellptr] > 0 else (self.base - 1)
-
-      if command == '0':
-        self.cells[self.cellptr] = self.null_value
-
-      if command == '[' and self.cells[self.cellptr] == 0: self.codeptr = self.bracemap[self.codeptr]
-      if command == ']' and self.cells[self.cellptr] != 0: self.codeptr = self.bracemap[self.codeptr]
-
-      if command == '.': self.action_stack.insert(0, self.cells[self.cellptr])
-      if command == '!': self.action_stack.append(self.cells[self.cellptr])
-
-      if command == ',':
+    if self.codeptr == len(self.code):
+      if self.cycle:
+        self.codeptr = -1
         self.state = State.AWAITING_INPUT
-        self.record_snapshot(command)
+        self.record_snapshot(',')
         return
-
-      self.codeptr += 1
-      self.steps += 1
-
-      if self.max_steps is not None and self.steps >= self.max_steps:
-        self.result = Result.STEP_LIMIT
+      else:
         self.state = State.FINISHED
+        self.result = Result.SUCCESS
         return
 
-      if self.cycle and self.codeptr == len(self.code):
-        self.codeptr = 0
-
+    command = self.code[self.codeptr]
     self.record_snapshot(command)
 
-    self.state = State.FINISHED
-    self.result = Result.SUCCESS
+    if command == '>':
+      self.cellptr += 1
+      if self.cellptr == len(self.cells): self.cells.append(self.null_value)
+
+    if command == '<':
+      self.cellptr = 0 if self.cellptr <= 0 else self.cellptr - 1
+
+    if command == '+':
+      self.cells[self.cellptr] = self.cells[self.cellptr] + 1 if self.cells[self.cellptr] < (self.base - 1) else 0
+
+    if command == '-':
+      self.cells[self.cellptr] = self.cells[self.cellptr] - 1 if self.cells[self.cellptr] > 0 else (self.base - 1)
+
+    if command == '0':
+      self.cells[self.cellptr] = self.null_value
+
+    if command == '[' and self.cells[self.cellptr] == 0: self.codeptr = self.bracemap[self.codeptr]
+    if command == ']' and self.cells[self.cellptr] != 0: self.codeptr = self.bracemap[self.codeptr]
+
+    if command == '.': self.action_stack.insert(0, self.cells[self.cellptr])
+    if command == '!': self.action_stack.append(self.cells[self.cellptr])
+
+    if command == ',':
+      self.state = State.AWAITING_INPUT
+      self.record_snapshot(command)
+      return
+
+    self.codeptr += 1
+    self.steps += 1
+
+  def execute(self):
+    self.step()
+
+    while self.state == State.EXECUTING:
+      self.step()
 
   def input(self, inp):
     while self.state != State.AWAITING_INPUT:
