@@ -69,10 +69,7 @@ def default_config():
           correct_syntax=False,
       ),
       batch_size=4,
-      sprint_length=100,
-      syntax_error_reward=0,
-      gym_sets=10,
-      gym_reps=10000,
+      sprints=1000,
       render=False,
       timestep_limit=256)
 

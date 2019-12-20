@@ -16,58 +16,43 @@ import dill
 import tensorflow as tf
 
 @task_launcher
-def run_gym_test(config, task_id, logdir, summary_tasks, master, log_level, num_repetitions):
-    config = default_config_with_updates(config)
-
-    os.makedirs(logdir, exist_ok = True)
-    parent_logger = logging.getLogger('bff')
-    parent_logger.setLevel(log_level)
-    parent_logger.addHandler(logging.FileHandler(f'{logdir}/log.log'))
-
+def run_gym_test(config, task_id, logdir, summary_tasks, master, num_repetitions):
     is_chief = (task_id == 0)
 
-    env = gym.make('CartPole-v0')
+    env = gym.make('CartPole-v1')
+    train_dir = os.path.join(logdir, 'train')
+    events_dir = '%s/events_%d' % (logdir, task_id)
 
-    for experiment_idx in range(num_repetitions):
-        experiment_dir = os.path.join(logdir, f'exp{experiment_idx}')
-        try:
-            os.makedirs(experiment_dir)
-        except FileExistsError:
-            get_dir_out_of_the_way(experiment_dir)
-            os.makedirs(experiment_dir)
+    if not (summary_tasks and task_id < summary_tasks):
+        events_dir = None
+    
+    rollouts = []
 
-        train_dir = os.path.join(experiment_dir, 'train')
-        events_dir = '%s/events_%d' % (logdir, task_id)
+    developer = Developer(config, LanguageModel)
+    with hire(developer, log_dir=train_dir, events_dir=events_dir, is_chief=is_chief) as employed_developer:
+        agent = ScrumMaster(employed_developer, env,
+                            cycle_programs=True,
+                            sprint_length=100,
+                            stretch_sprints=True,
+                            syntax_error_reward=0)
 
-        if not (summary_tasks and task_id < summary_tasks):
-            events_dir = None
-        
-        rollouts = []
+        while agent.sprints_elapsed < config.sprints:
+            rollout = agent.attend_gym(env, max_reps=config.gym_reps, render=config.render)
+            rollouts.append(rollout)
 
-        developer = Developer(config, LanguageModel)
-        with hire(developer, log_dir=train_dir, events_dir=events_dir, is_chief=is_chief) as employed_developer:
-            agent = ScrumMaster(employed_developer, env,
-                                cycle_programs=True,
-                                sprint_length=config.sprint_length,
-                                syntax_error_reward=0)
+            with open(os.path.join(logdir, 'rollouts.dill'), 'wb') as f:
+                dill.dump(rollouts, f)
 
-            for s in range(config.gym_sets):
-                rollout = agent.attend_gym(env, max_reps=config.gym_reps, render=config.render)
-                rollouts.append(rollout)
+            with open(os.path.join(logdir, 'programs.txt'), 'w') as f:
+                f.writelines(p.code + '\n' for p in agent.executed_programs)
 
-                with open(os.path.join(experiment_dir, 'rollouts.dill'), 'wb') as f:
-                    dill.dump(rollouts, f)
-
-                with open(os.path.join(experiment_dir, 'programs.txt'), 'w') as f:
-                    f.writelines(p.code + '\n' for p in agent.executed_programs)
-
-                with open(os.path.join(experiment_dir, 'summary.txt'), 'w') as f:
-                    episode_lengths = [len(rollout) for rollout in rollouts]
-                    f.write(str({
-                        'episode_lengths': episode_lengths,
-                        'sprint_length': agent.sprint_length,
-                        'longest_episode': max(episode_lengths)
-                    }))
+            with open(os.path.join(logdir, 'summary.txt'), 'w') as f:
+                episode_lengths = [len(rollout) for rollout in rollouts]
+                f.write(str({
+                    'episode_lengths': episode_lengths,
+                    'sprint_length': agent.sprint_length,
+                    'longest_episode': max(episode_lengths)
+                }))
 
 if __name__ == '__main__':
     run_gym_test()

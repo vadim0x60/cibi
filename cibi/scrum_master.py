@@ -61,7 +61,7 @@ class ScrumMaster(Agent):
     At the moment, Scrum Master is only able to manage one developer
     """
 
-    def __init__(self, developer, env, sprint_length, 
+    def __init__(self, developer, env, sprint_length, stretch_sprints=True,
                  cycle_programs=True, syntax_error_reward=0):
         self.developer = developer
         # TODO: config discretization steps
@@ -73,11 +73,14 @@ class ScrumMaster(Agent):
 
         self.sprint_length = sprint_length
         self.sprint_ttl = sprint_length
+        self.stretch_sprints = stretch_sprints
+        self.sprints_elapsed = 0
+
+        self.programs_for_reflection = []
+        self.rewards = []
 
         self.programs_for_execution = self.make_executables()
         self.executed_programs = [self.programs_for_execution.pop()]
-        self.programs_for_reflection = []
-        self.rewards = []
 
     def init(self):
         if self.rewards:
@@ -119,14 +122,23 @@ class ScrumMaster(Agent):
     def done(self):
         self.retrospective()
 
+        if self.sprint_ttl <= 0:
+            self.reprogram()
+
     def reward(self, reward, force_reprogram=False):
         self.rewards.append(reward)
         self.sprint_ttl -= 1
 
-        if force_reprogram or self.sprint_ttl == 0:
+        if force_reprogram:
+            self.reprogram()
+            
+        if not self.stretch_sprints and self.sprint_ttl == 0:
             self.reprogram()
 
     def make_executables(self):
+        # If we have something to discuss, discuss before writing new code
+        self.retrospective()
+
         # Get the developer to write code
         programs = self.developer.write_programs()
 
@@ -145,7 +157,5 @@ class ScrumMaster(Agent):
         self.programs_for_reflection.append(self.executed_programs[-1])
         self.executed_programs.append(self.programs_for_execution.pop())
 
-        if len(self.programs_for_reflection) == self.developer.batch_size:
-            self.retrospective()
-
         self.sprint_ttl = self.sprint_length
+        self.sprints_elapsed += 1

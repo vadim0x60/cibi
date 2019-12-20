@@ -19,7 +19,7 @@ import tensorflow as tf
 def run_gym_test(config, task_id, logdir, summary_tasks, master, num_repetitions):
     is_chief = (task_id == 0)
 
-    env = gym.make('MountainCar-v0')
+    env = gym.make('MountainCarContinuous-v0')
 
     train_dir = os.path.join(logdir, 'train')
     events_dir = '%s/events_%d' % (logdir, task_id)
@@ -33,9 +33,9 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, num_repetitions
     with hire(developer, log_dir=train_dir, events_dir=events_dir, is_chief=is_chief) as employed_developer:
         agent = ScrumMaster(employed_developer, env,
                             cycle_programs=True,
-                            sprint_length=200,
+                            sprint_length=999,
                             stretch_sprints=True,
-                            syntax_error_reward=-200)
+                            syntax_error_reward=0)
 
         while agent.sprints_elapsed < config.sprints:
             rollouts.append(agent.attend_gym(env, max_reps=None, render=config.render))

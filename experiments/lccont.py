@@ -19,7 +19,7 @@ import tensorflow as tf
 def run_gym_test(config, task_id, logdir, summary_tasks, master, num_repetitions):
     is_chief = (task_id == 0)
 
-    env = gym.make('MountainCar-v0')
+    env = gym.make('LunarLanderContinious-v2')
 
     train_dir = os.path.join(logdir, 'train')
     events_dir = '%s/events_%d' % (logdir, task_id)
@@ -28,17 +28,21 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, num_repetitions
         events_dir = None
     
     rollouts = []
+    game_over = []
+    lander_awake = []
 
     developer = Developer(config, LanguageModel)
     with hire(developer, log_dir=train_dir, events_dir=events_dir, is_chief=is_chief) as employed_developer:
         agent = ScrumMaster(employed_developer, env,
                             cycle_programs=True,
-                            sprint_length=200,
+                            sprint_length=1000,
                             stretch_sprints=True,
-                            syntax_error_reward=-200)
+                            syntax_error_reward=-500)
 
         while agent.sprints_elapsed < config.sprints:
             rollouts.append(agent.attend_gym(env, max_reps=None, render=config.render))
+            game_over.append(env.game_over)
+            lander_awake.append(env.lander.awake)
 
             with open(os.path.join(logdir, 'rollouts.dill'), 'wb') as f:
                 dill.dump(rollouts, f)
@@ -47,11 +51,10 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, num_repetitions
                 f.writelines(p.code + '\n' for p in agent.executed_programs)
 
             with open(os.path.join(logdir, 'summary.txt'), 'w') as f:
-                episode_lengths = [len(rollout) for rollout in rollouts]
                 f.write(str({
-                    'episode_lengths': episode_lengths,
                     'sprint_length': agent.sprint_length,
-                    'shortest_episode': len(episode_lengths)
+                    'game_over': game_over,
+                    'lander_awake': lander_awake
                 }))
 
 if __name__ == '__main__':

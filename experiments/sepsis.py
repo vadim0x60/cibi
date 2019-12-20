@@ -47,15 +47,9 @@ def SepsisEnv():
         env = e.SepsisEnv()
     return EnvWithGraph(env, graph)
 
+
 @task_launcher
-def run_gym_test(config, task_id, logdir, summary_tasks, master, log_level, num_repetitions):
-    config = default_config_with_updates(config)
-
-    os.makedirs(logdir, exist_ok = True)
-    parent_logger = logging.getLogger('bff')
-    parent_logger.setLevel(log_level)
-    parent_logger.addHandler(logging.FileHandler(f'{logdir}/log.log'))
-
+def run_gym_test(config, task_id, logdir, summary_tasks, master, num_repetitions):
     logger = logging.getLogger(f'bff.{__file__}')
 
     is_chief = (task_id == 0)
@@ -76,26 +70,22 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, log_level, num_
                             sprint_length=config.sprint_length,
                             syntax_error_reward=config.syntax_error_reward)
 
-        for experiment_idx in range(num_repetitions):
-            # Gym sets are not sets in a (data)set sense
-            # These are sets in the gym "sets and reps" sense
+        logger.info(f'Train cohort of patients (it is OK to kill them for exploration)')
+        for s in range(config.gym_sets):
+            agent.attend_gym(env, max_reps=None, render=config.render)
 
-            logger.info(f'Train cohort of patients (it is OK to kill them for exploration)')
-            for s in range(config.gym_sets):
-                agent.attend_gym(env, max_reps=None, render=config.render)
+        logger.info(f'Test cohort of patients (hopefully they get out alive)')
+        survival_rate = 0
+        steps_taken = []
+        for s in range(config.gym_sets):
+            agent.attend_gym(env, max_reps=None, render=config.render)
+            survival_rate += agent.rewards[-1] > 0
+            steps_taken.append(len(agent.rewards))
 
-            logger.info(f'Test cohort of patients (hopefully they get out alive)')
-            survival_rate = 0
-            steps_taken = []
-            for s in range(config.gym_sets):
-                agent.attend_gym(env, max_reps=None, render=config.render)
-                survival_rate += agent.rewards[-1] > 0
-                steps_taken.append(len(agent.rewards))
-
-            survival_rate /= config.gym_sets
-            
-            logger.info(f'Survival_rate: {survival_rate}')
-            logger.info(f'Steps taken: {np.mean(steps_taken)}')
+        survival_rate /= config.gym_sets
+        
+        logger.info(f'Survival_rate: {survival_rate}')
+        logger.info(f'Steps taken: {np.mean(steps_taken)}')
 
 if __name__ == '__main__':
     run_gym_test()

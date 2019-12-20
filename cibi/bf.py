@@ -104,16 +104,19 @@ class TuringMemoryWriter:
       value_ptr += 1
 
 class ActionSampler:
-  def __init__(self, action_space, discretization_steps=32):
+  def __init__(self, action_space, discretization_steps=32, default_action=None):
     space_type = type(action_space)
     self.sample_shape = action_space.shape
     self.discretization_steps = discretization_steps
+    self.just_a_number = False
 
     if space_type == s.Discrete:
-      self.lower_bound = 0
-      self.upper_bound = action_space.n - 1
-      self.bounded_below = True
-      self.bounded_above = True
+      self.lower_bound = np.array([1])
+      self.upper_bound = np.array([action_space.n - 1])
+      self.bounded_below = np.array([True])
+      self.bounded_above = np.array([True])
+      self.default_action = 0
+      self.just_a_number = True
 
       # Optional, but mapping 0-15 to 0 and 16-31 to 1 
       # in a binary case is an unnecessary complication
@@ -125,31 +128,40 @@ class ActionSampler:
       self.lower_bound = np.zeros_like(self.upper_bound)
       self.bounded_above = np.ones_like(self.upper_bound)
       self.bounded_below = np.ones_like(self.lower_bound)
+      self.default_action = self.lower_bound
 
     elif space_type == s.MultiBinary:
       self.lower_bound = np.zeros(action_space.n)
       self.upper_bound = np.ones(action_space.n)
       self.bounded_above = np.ones_like(self.upper_bound)
       self.bounded_below = np.ones_like(self.lower_bound)
+      self.default_action = self.lower_bound
 
     elif space_type == s.Box:
-      self.lower_bound = action_space.lower_bound
-      self.upper_bound = action_space.upper_bound
+      self.lower_bound = action_space.low
+      self.upper_bound = action_space.high
       self.bounded_above = action_space.bounded_above
       self.bounded_below = action_space.bounded_below
+      self.default_action = np.zeros(self.sample_shape, dtype=np.float)
 
     else:
       raise NotImplementedError('Only Discrete, MultiDiscrete, MultiBinary and Box spaces are supported')
 
-  def undiscretize(self, discrete_actions):
-    double_bounded = self.bounded_below * self.bounded_above
-    unbounded = (1 - self.bounded_below) * (1 - self.bounded_above)
+    # Override defaults
+    if default_action is not None:
+      self.default_action = default_action
 
-    actions = double_bounded * np.mod(discrete_actions, self.discretization_steps)
-    actions += self.bounded_below * self.lower_bound
-    actions += self.bounded_above * (1 - self.bounded_below) * self.upper_bound
-    actions += (self.bounded_below - self.bounded_above) * np.abs(actions)
-    actions += unbounded * actions
+  def undiscretize(self, discrete_actions):
+    # See the paper for formula and explanation
+    bounded_below = self.bounded_below.astype(np.int)
+    bounded_above = self.bounded_above.astype(np.int)
+
+    double_bounded = bounded_below * bounded_above
+    actions = double_bounded * np.mod(discrete_actions, self.discretization_steps) * (self.upper_bound - self.lower_bound) / self.discretization_steps
+    actions += bounded_below * self.lower_bound
+    actions += bounded_above * (1 - bounded_below) * self.upper_bound
+    actions += (bounded_below - bounded_above) * np.abs(discrete_actions)
+    actions += (1 - self.bounded_below) * (1 - self.bounded_above) * discrete_actions
 
     return actions
 
@@ -157,15 +169,18 @@ class ActionSampler:
     sample_size = int(np.prod(self.sample_shape))
 
     # like pop(), but for many elements
-    sample = action_stack[-sample_size:]
-    del action_stack[-sample_size:]
-
-    if sample_size == 1:
-      sample = sample[0]
+    if len(action_stack) < sample_size:
+      return self.default_action
     else:
-      sample = np.array(sample).reshape(self.sample_shape)
+      sample = action_stack[-sample_size:]
+      del action_stack[-sample_size:]
 
-    return self.undiscretize(sample)
+      sample = np.array(sample).reshape(self.sample_shape)
+      sample = self.undiscretize(sample)
+      if self.just_a_number:
+        return int(sample)
+      else:
+        return sample
     
 class Executable(Agent):
   def __init__(self, code, memory_writer, action_sampler,
@@ -304,10 +319,7 @@ class Executable(Agent):
     self.steps += 1
 
   def act(self):
-    try:
-      return self.action_sampler.sample(self.action_stack)
-    except IndexError:
-      return self.null_value
+    return self.action_sampler.sample(self.action_stack)
 
 class Program:
     code = ""

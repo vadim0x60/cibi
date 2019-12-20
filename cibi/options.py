@@ -1,5 +1,9 @@
 import click
 import inspect
+import os
+import logging
+from cibi.defaults import default_config_with_updates
+from cibi.utils import get_dir_out_of_the_way
 
 def task_launcher(f):
     relevant_options = set(inspect.getargspec(f).args)
@@ -19,7 +23,24 @@ def task_launcher(f):
     @click.option('--model-v', default=0, type=int, help='Model verbosity level.')
     @click.option('--delayed-graph-cleanup', is_flag=True, help='If true, container for n-th run will not be reset until the (n+1)-th run is complete. This greatly reduces the chance that a worker is still using the n-th container when it is cleared.')
     def run(**kwargs):
+        kwargs['config'] = default_config_with_updates(kwargs['config'])
+        
+        logdir = kwargs['logdir']
+        os.makedirs(logdir, exist_ok = True)
+        parent_logger = logging.getLogger('bff')
+        parent_logger.setLevel(kwargs['log_level'])
+        parent_logger.addHandler(logging.FileHandler(f'{logdir}/log.log'))
+
         kwargs = {k:v for k,v in kwargs.items() if k in relevant_options}
-        f(**kwargs)
+        for experiment_idx in range(kwargs['num_repetitions']):
+            experiment_dir = os.path.join(logdir, f'exp{experiment_idx}')
+            try:
+                os.makedirs(experiment_dir)
+            except FileExistsError:
+                get_dir_out_of_the_way(experiment_dir)
+                os.makedirs(experiment_dir)
+
+            kwargs['logdir'] = experiment_dir
+            f(**kwargs)
 
     return run

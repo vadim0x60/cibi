@@ -19,7 +19,7 @@ import tensorflow as tf
 def run_gym_test(config, task_id, logdir, summary_tasks, master, num_repetitions):
     is_chief = (task_id == 0)
 
-    env = gym.make('MountainCar-v0')
+    env = gym.make('Taxi-v3')
 
     train_dir = os.path.join(logdir, 'train')
     events_dir = '%s/events_%d' % (logdir, task_id)
@@ -35,7 +35,7 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, num_repetitions
                             cycle_programs=True,
                             sprint_length=200,
                             stretch_sprints=True,
-                            syntax_error_reward=-200)
+                            syntax_error_reward=-2000)
 
         while agent.sprints_elapsed < config.sprints:
             rollouts.append(agent.attend_gym(env, max_reps=None, render=config.render))
@@ -51,7 +51,7 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, num_repetitions
                 f.write(str({
                     'episode_lengths': episode_lengths,
                     'sprint_length': agent.sprint_length,
-                    'shortest_episode': len(episode_lengths)
+                    'shortest_episode': min(episode_lengths)
                 }))
 
 if __name__ == '__main__':
