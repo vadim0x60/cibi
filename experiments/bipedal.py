@@ -33,7 +33,7 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, num_repetitions
         agent = ScrumMaster(employed_developer, env,
                             cycle_programs=True,
                             sprint_length=100,
-                            stretch_sprints=True,
+                            stretch_sprints=False,
                             syntax_error_reward=-100)
 
         while agent.sprints_elapsed < config.sprints:
