@@ -50,139 +50,142 @@ class Developer(object):
     self.task_id = task_id
     self.ps_tasks = ps_tasks
     self.is_chief = is_chief
+    self.graph = tf.Graph()
 
-    if ps_tasks == 0:
-      assert task_id == 0, 'No parameter servers specified. Expecting 1 task.'
-      assert num_workers == 1, (
-          'No parameter servers specified. Expecting 1 task.')
-      worker_device = '/job:localhost/replica:%d/task:0/cpu:0' % task_id
-      # worker_device = '/cpu:0'
-      # ps_device = '/cpu:0'
-    else:
-      assert num_workers > 0, 'There must be at least 1 training worker.'
-      worker_device = '/job:worker/replica:%d/task:0/cpu:0' % task_id
-      # ps_device = '/job:ps/replica:0/task:0/cpu:0'
-    logger.info('worker_device: %s', worker_device)
+    with self.graph.as_default():
 
-    logging_file = os.path.join(
-        logging_dir, 'solutions_%d.txt' % task_id)
-    experience_replay_file = os.path.join(
-        logging_dir, 'replay_buffer_%d.pickle' % task_id)
-    self.topk_file = os.path.join(
-        logging_dir, 'topk_buffer_%d.pickle' % task_id)
+      if ps_tasks == 0:
+        assert task_id == 0, 'No parameter servers specified. Expecting 1 task.'
+        assert num_workers == 1, (
+            'No parameter servers specified. Expecting 1 task.')
+        worker_device = '/job:localhost/replica:%d/task:0/cpu:0' % task_id
+        # worker_device = '/cpu:0'
+        # ps_device = '/cpu:0'
+      else:
+        assert num_workers > 0, 'There must be at least 1 training worker.'
+        worker_device = '/job:worker/replica:%d/task:0/cpu:0' % task_id
+        # ps_device = '/job:ps/replica:0/task:0/cpu:0'
+      logger.info('worker_device: %s', worker_device)
 
-    tf.get_variable_scope().set_use_resource(True)
+      logging_file = os.path.join(
+          logging_dir, 'solutions_%d.txt' % task_id)
+      experience_replay_file = os.path.join(
+          logging_dir, 'replay_buffer_%d.pickle' % task_id)
+      self.topk_file = os.path.join(
+          logging_dir, 'topk_buffer_%d.pickle' % task_id)
 
-    # global model
-    with tf.device(tf.train.replica_device_setter(ps_tasks,
-                                                  ps_device='/job:ps/replica:0',
-                                                  worker_device=worker_device)):
-      with tf.variable_scope('global'):
-        global_model = make_language_model(config, dtype=dtype, is_local=False)
-        global_params_dict = {p.name: p
-                              for p in global_model.sync_variables}
-        self.global_model = global_model
-        self.global_step = make_initialized_variable(
-            0, 'global_step', dtype=tf.int64)
+      tf.get_variable_scope().set_use_resource(True)
 
-        self.global_best_reward = make_initialized_variable(
-            -10.0, 'global_best_reward', dtype=tf.float64)
-        self.is_best_model = make_initialized_variable(
-            False, 'is_best_model', dtype=tf.bool)
-        self.reset_is_best_model = self.is_best_model.assign(False)
-        self.global_best_reward_placeholder = tf.placeholder(
-            tf.float64, [], name='global_best_reward_placeholder')
-        self.assign_global_best_reward_op = tf.group(
-            self.global_best_reward.assign(
-                self.global_best_reward_placeholder),
-            self.is_best_model.assign(True))
-        def assign_global_best_reward_fn(session, reward):
-          reward = round(reward, 10)
-          best_reward = round(session.run(self.global_best_reward), 10)
-          is_best = reward > best_reward
-          if is_best:
-            session.run(self.assign_global_best_reward_op,
-                        {self.global_best_reward_placeholder: reward})
-          return is_best
-        self.assign_global_best_reward_fn = assign_global_best_reward_fn
+      # global model
+      with tf.device(tf.train.replica_device_setter(ps_tasks,
+                                                    ps_device='/job:ps/replica:0',
+                                                    worker_device=worker_device)):
+        with tf.variable_scope('global'):
+          global_model = make_language_model(config, dtype=dtype, is_local=False)
+          global_params_dict = {p.name: p
+                                for p in global_model.sync_variables}
+          self.global_model = global_model
+          self.global_step = make_initialized_variable(
+              0, 'global_step', dtype=tf.int64)
 
-        self.run_number = make_initialized_variable(
-            run_number, 'run_number', dtype=tf.int32)
+          self.global_best_reward = make_initialized_variable(
+              -10.0, 'global_best_reward', dtype=tf.float64)
+          self.is_best_model = make_initialized_variable(
+              False, 'is_best_model', dtype=tf.bool)
+          self.reset_is_best_model = self.is_best_model.assign(False)
+          self.global_best_reward_placeholder = tf.placeholder(
+              tf.float64, [], name='global_best_reward_placeholder')
+          self.assign_global_best_reward_op = tf.group(
+              self.global_best_reward.assign(
+                  self.global_best_reward_placeholder),
+              self.is_best_model.assign(True))
+          def assign_global_best_reward_fn(session, reward):
+            reward = round(reward, 10)
+            best_reward = round(session.run(self.global_best_reward), 10)
+            is_best = reward > best_reward
+            if is_best:
+              session.run(self.assign_global_best_reward_op,
+                          {self.global_best_reward_placeholder: reward})
+            return is_best
+          self.assign_global_best_reward_fn = assign_global_best_reward_fn
 
-        # Count all programs sampled from policy. This does not include
-        # programs sampled from replay buffer.
-        # This equals NPE (number of programs executed). Only programs sampled
-        # from the policy need to be executed.
-        self.program_count = make_initialized_variable(
-            0, 'program_count', dtype=tf.int64)
+          self.run_number = make_initialized_variable(
+              run_number, 'run_number', dtype=tf.int32)
 
-    # local model
-    with tf.device(worker_device):
+          # Count all programs sampled from policy. This does not include
+          # programs sampled from replay buffer.
+          # This equals NPE (number of programs executed). Only programs sampled
+          # from the policy need to be executed.
+          self.program_count = make_initialized_variable(
+              0, 'program_count', dtype=tf.int64)
+
+      # local model
+      with tf.device(worker_device):
+        with tf.variable_scope('local'):
+          self.model = model = make_language_model(
+              config,
+              logging_file=logging_file,
+              experience_replay_file=experience_replay_file,
+              dtype=dtype,
+              global_best_reward_fn=self.assign_global_best_reward_fn,
+              program_count=self.program_count,
+              verbose_level=model_v)
+          local_params = model.trainable_variables
+          local_params_dict = {p.name: p for p in local_params}
+
+      # Pull global params to local model.
+      def _global_to_local_scope(name):
+        assert name.startswith('global/')
+        return 'local' + name[6:]
+      sync_dict = {
+          local_params_dict[_global_to_local_scope(p_name)]: p
+          for p_name, p in global_params_dict.items()}
+      self.sync_op = tf.group(*[v_local.assign(v_global)
+                                for v_local, v_global
+                                in sync_dict.items()])
+
+      # Pair local gradients with global params.
+      grad_var_dict = {
+          gradient: sync_dict[local_var]
+          for local_var, gradient in model.gradients_dict.items()}
+
+      # local model
+      model.make_summary_ops()  # Don't put summaries under 'local' scope.
       with tf.variable_scope('local'):
-        self.model = model = make_language_model(
-            config,
-            logging_file=logging_file,
-            experience_replay_file=experience_replay_file,
-            dtype=dtype,
-            global_best_reward_fn=self.assign_global_best_reward_fn,
-            program_count=self.program_count,
-            verbose_level=model_v)
-        local_params = model.trainable_variables
-        local_params_dict = {p.name: p for p in local_params}
+        self.train_op = model.optimizer.apply_gradients(
+            grad_var_dict.items(), global_step=self.global_step)
+        self.local_init_op = tf.variables_initializer(
+            tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
+                              tf.get_variable_scope().name))
 
-    # Pull global params to local model.
-    def _global_to_local_scope(name):
-      assert name.startswith('global/')
-      return 'local' + name[6:]
-    sync_dict = {
-        local_params_dict[_global_to_local_scope(p_name)]: p
-        for p_name, p in global_params_dict.items()}
-    self.sync_op = tf.group(*[v_local.assign(v_global)
-                              for v_local, v_global
-                              in sync_dict.items()])
+      self.local_step = 0
+      self.last_summary_time = time.time()
+      self.summary_interval = summary_interval
+      self.summary_writer = summary_writer
+      self.cached_global_step = -1
+      self.cached_global_npe = -1
 
-    # Pair local gradients with global params.
-    grad_var_dict = {
-        gradient: sync_dict[local_var]
-        for local_var, gradient in model.gradients_dict.items()}
+      logger.info('summary_interval: %d', self.summary_interval)
 
-    # local model
-    model.make_summary_ops()  # Don't put summaries under 'local' scope.
-    with tf.variable_scope('local'):
-      self.train_op = model.optimizer.apply_gradients(
-          grad_var_dict.items(), global_step=self.global_step)
-      self.local_init_op = tf.variables_initializer(
-          tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
-                            tf.get_variable_scope().name))
+      # Load top-k buffer.
+      if self.model.top_episodes is not None and tf.gfile.Exists(self.topk_file):
+        try:
+          with tf.gfile.FastGFile(self.topk_file, 'r') as f:
+            self.model.top_episodes = pickle.loads(f.read())
+          logger.info(
+              'Loaded top-k buffer from disk with %d items. Location: "%s"',
+              len(self.model.top_episodes), self.topk_file)
+        except (pickle.UnpicklingError, EOFError) as e:
+          logger.warn(
+              'Failed to load existing top-k buffer from disk. Removing bad file.'
+              '\nLocation: "%s"\nException: %s', self.topk_file, str(e))
+          tf.gfile.Remove(self.topk_file)
 
-    self.local_step = 0
-    self.last_summary_time = time.time()
-    self.summary_interval = summary_interval
-    self.summary_writer = summary_writer
-    self.cached_global_step = -1
-    self.cached_global_npe = -1
-
-    logger.info('summary_interval: %d', self.summary_interval)
-
-    # Load top-k buffer.
-    if self.model.top_episodes is not None and tf.gfile.Exists(self.topk_file):
-      try:
-        with tf.gfile.FastGFile(self.topk_file, 'r') as f:
-          self.model.top_episodes = pickle.loads(f.read())
-        logger.info(
-            'Loaded top-k buffer from disk with %d items. Location: "%s"',
-            len(self.model.top_episodes), self.topk_file)
-      except (pickle.UnpicklingError, EOFError) as e:
-        logger.warn(
-            'Failed to load existing top-k buffer from disk. Removing bad file.'
-            '\nLocation: "%s"\nException: %s', self.topk_file, str(e))
-        tf.gfile.Remove(self.topk_file)
-
-    variables_to_save = [v for v in tf.global_variables()
-                         if v.name.startswith('global')]
-    self.ready_op = tf.report_uninitialized_variables(variables_to_save)
-    self.global_init_op = tf.variables_initializer(variables_to_save)
-    self.saver = tf.train.Saver(variables_to_save)
+      variables_to_save = [v for v in tf.global_variables()
+                          if v.name.startswith('global')]
+      self.ready_op = tf.report_uninitialized_variables(variables_to_save)
+      self.global_init_op = tf.variables_initializer(variables_to_save)
+      self.saver = tf.train.Saver(variables_to_save)
 
   def initialize(self, session):
     """Run initialization ops."""
@@ -323,19 +326,20 @@ class EmployedDeveloper():
     self.session = None
 
 def hire(developer, log_dir, events_dir=None, is_chief=True):
-  summary_writer = tf.summary.FileWriter(events_dir) if events_dir else None
+  with developer.graph.as_default():
+    summary_writer = tf.summary.FileWriter(events_dir) if events_dir else None
 
-  sv = tf.train.Supervisor( is_chief=is_chief,
-                            logdir=log_dir,
-                            saver=developer.saver,
-                            summary_op=None,
-                            init_op=developer.global_init_op,
-                            init_fn=init_fn,
-                            summary_writer=summary_writer,
-                            ready_op=developer.ready_op,
-                            ready_for_local_init_op=None,
-                            global_step=developer.global_step,
-                            save_model_secs=30,
-                            save_summaries_secs=30)
+    sv = tf.train.Supervisor( is_chief=is_chief,
+                              logdir=log_dir,
+                              saver=developer.saver,
+                              summary_op=None,
+                              init_op=developer.global_init_op,
+                              init_fn=init_fn,
+                              summary_writer=summary_writer,
+                              ready_op=developer.ready_op,
+                              ready_for_local_init_op=None,
+                              global_step=developer.global_step,
+                              save_model_secs=30,
+                              save_summaries_secs=30)
 
-  return EmployedDeveloper(developer, sv.managed_session())
+    return EmployedDeveloper(developer, sv.managed_session())
