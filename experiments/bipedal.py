@@ -56,7 +56,7 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, num_repetitions
                 })
 
                 f.write(summary)
-                logger.info(f'Summary: {summary}')
+        logger.info(f'Summary: {summary}')
 
 if __name__ == '__main__':
     run_gym_test()

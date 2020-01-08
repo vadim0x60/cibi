@@ -18,6 +18,8 @@ import tensorflow as tf
 @task_launcher
 def run_gym_test(config, task_id, logdir, summary_tasks, master, num_repetitions):
     is_chief = (task_id == 0)
+    logger = logging.getLogger('cibi')
+    logger.info('Taxi-v3')
 
     env = gym.make('Taxi-v3')
 
@@ -48,11 +50,13 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, num_repetitions
 
             with open(os.path.join(logdir, 'summary.txt'), 'w') as f:
                 episode_lengths = [len(rollout) for rollout in rollouts]
-                f.write(str({
+                summary = str({
                     'episode_lengths': episode_lengths,
                     'sprint_length': agent.sprint_length,
                     'shortest_episode': min(episode_lengths)
-                }))
+                })
+                f.write(summary)
+        logger.info(f'Summary: {summary}')
 
 if __name__ == '__main__':
     run_gym_test()
