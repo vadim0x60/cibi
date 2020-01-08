@@ -37,7 +37,7 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, num_repetitions
                             syntax_error_reward=0)
 
         while agent.sprints_elapsed < config.sprints:
-            rollout = agent.attend_gym(env, max_reps=config.gym_reps, render=config.render)
+            rollout = agent.attend_gym(env, max_reps=None, render=config.render)
             rollouts.append(rollout)
 
             with open(os.path.join(logdir, 'rollouts.dill'), 'wb') as f:
