@@ -19,7 +19,7 @@ import tensorflow as tf
 def run_gym_test(config, task_id, logdir, summary_tasks, master, num_repetitions):
     is_chief = (task_id == 0)
     logger = logging.getLogger('cibi')
-    logger.log('MountainCar-v0')
+    logger.info('MountainCar-v0')
 
     env = gym.make('MountainCar-v0')
 
@@ -57,7 +57,7 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, num_repetitions
                 })
 
                 f.write(summary)
-                logger.log(f'Summary: {summary}')
+                logger.info(f'Summary: {summary}')
 
 if __name__ == '__main__':
     run_gym_test()
