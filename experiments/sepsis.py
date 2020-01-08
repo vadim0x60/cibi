@@ -50,7 +50,7 @@ def SepsisEnv():
 
 @task_launcher
 def run_gym_test(config, task_id, logdir, summary_tasks, master, num_repetitions):
-    logger = logging.getLogger(f'bff.{__file__}')
+    logger = logging.getLogger(f'cibi.{__file__}')
 
     is_chief = (task_id == 0)
     train_dir = os.path.join(logdir, 'train')

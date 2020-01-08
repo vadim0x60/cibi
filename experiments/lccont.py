@@ -18,6 +18,8 @@ import tensorflow as tf
 @task_launcher
 def run_gym_test(config, task_id, logdir, summary_tasks, master, num_repetitions):
     is_chief = (task_id == 0)
+    logger = logging.getLogger('cibi')
+    logger.log('LunarLanderContinious-v2')
 
     env = gym.make('LunarLanderContinious-v2')
 
@@ -51,11 +53,14 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, num_repetitions
                 f.writelines(p.code + '\n' for p in agent.executed_programs)
 
             with open(os.path.join(logdir, 'summary.txt'), 'w') as f:
-                f.write(str({
+                summary = str({
                     'sprint_length': agent.sprint_length,
                     'game_over': game_over,
                     'lander_awake': lander_awake
-                }))
+                })
+
+                f.write(summary)
+                logger.log(f'Summary: {summary}')
 
 if __name__ == '__main__':
     run_gym_test()

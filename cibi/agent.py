@@ -1,5 +1,5 @@
 import logging
-logger = logging.getLogger(f'bff.{__file__}')
+logger = logging.getLogger(f'cibi.{__file__}')
 import itertools
 
 from cibi.rollout import Rollout

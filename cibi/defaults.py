@@ -5,7 +5,7 @@ from __future__ import print_function
 """Default configuration for agent and environment."""
 
 import logging
-logger = logging.getLogger(f'bff.{__file__}')
+logger = logging.getLogger(f'cibi.{__file__}')
 
 from cibi import config_lib  # brain coder
 

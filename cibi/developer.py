@@ -8,7 +8,7 @@ from collections import namedtuple
 
 from cibi import utils
 
-logger = logging.getLogger(f'bff.{__file__}')
+logger = logging.getLogger(f'cibi.{__file__}')
 
 def make_initialized_variable(value, name, shape=None, dtype=tf.float32):
   """Create a tf.Variable with a constant initializer.

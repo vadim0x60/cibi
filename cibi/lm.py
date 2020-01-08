@@ -22,7 +22,7 @@ from cibi import bf
 from cibi.bf import BF_EOS_INT, BF_EOS_CHAR, BF_INT_TO_CHAR, BF_CHAR_TO_INT
 
 import logging
-logger = logging.getLogger(f'bff.{__file__}')
+logger = logging.getLogger(f'cibi.{__file__}')
 
 # Experiments in the ICLR 2018 paper used reduce_sum instead of reduce_mean for
 # some losses. We make all loses be batch_size independent, and multiply the

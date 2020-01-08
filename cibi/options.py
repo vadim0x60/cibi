@@ -27,7 +27,7 @@ def task_launcher(f):
         
         logdir = kwargs['logdir']
         os.makedirs(logdir, exist_ok = True)
-        parent_logger = logging.getLogger('bff')
+        parent_logger = logging.getLogger('cibi')
         parent_logger.setLevel(kwargs['log_level'])
         parent_logger.addHandler(logging.FileHandler(f'{logdir}/log.log'))
 
