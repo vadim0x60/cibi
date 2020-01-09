@@ -52,7 +52,7 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, num_repetitions
                 summary = str({
                     'episode_lengths': episode_lengths,
                     'sprint_length': agent.sprint_length,
-                    'shortest_episode': len(episode_lengths)
+                    'shortest_episode': min(episode_lengths)
                 })
 
                 f.write(summary)
