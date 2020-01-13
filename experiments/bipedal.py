@@ -32,6 +32,7 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, num_repetitions
         events_dir = None
     
     total_rewards = []
+    episode_lengths = []
     developer = Developer(config, LanguageModel)
     with hire(developer, log_dir=train_dir, events_dir=events_dir, is_chief=is_chief) as employed_developer:
         agent = ScrumMaster(employed_developer, env,
@@ -43,6 +44,7 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, num_repetitions
         while agent.sprints_elapsed < config.sprints:
             rollout = agent.attend_gym(env, max_reps=None, render=config.render)
             total_rewards.append(rollout.total_reward)
+            episode_lengths.append(len(rollout))
 
             with open(os.path.join(rollouts_dir, f'{agent.sprints_elapsed}sprints_in.dill'), 'wb') as f:
                 dill.dump(rollout, f)
@@ -51,7 +53,6 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, num_repetitions
                 f.writelines(p.code + '\n' for p in agent.executed_programs)
 
             with open(os.path.join(logdir, 'summary.txt'), 'w') as f:
-                episode_lengths = [len(rollout) for rollout in rollouts]
                 summary = str({
                     'episode_lengths': episode_lengths,
                     'sprint_length': agent.sprint_length,
