@@ -2,7 +2,7 @@ from cibi.scrum_master import ScrumMaster
 from cibi.developer import Developer, hire
 from cibi.lm import LanguageModel
 from cibi.defaults import default_config_with_updates
-from cibi.options import task_launcher
+from cibi.launcher import task_launcher
 from cibi.metrics import best_reward_window
 from cibi.utils import get_dir_out_of_the_way
 

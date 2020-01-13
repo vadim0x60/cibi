@@ -33,7 +33,8 @@ def task_launcher(f):
 
         kwargs = {k:v for k,v in kwargs.items() if k in relevant_options}
         if kwargs['num_repetitions'] == 1:
-            os.makedirs(logdir, exist_ok=True)
+            get_dir_out_of_the_way(logdir)
+            os.makedirs(logdir)
             f(**kwargs)
         else:
             for experiment_idx in range(kwargs['num_repetitions']):
