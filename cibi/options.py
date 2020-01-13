@@ -32,15 +32,19 @@ def task_launcher(f):
         parent_logger.addHandler(logging.FileHandler(f'{logdir}/log.log'))
 
         kwargs = {k:v for k,v in kwargs.items() if k in relevant_options}
-        for experiment_idx in range(kwargs['num_repetitions']):
-            experiment_dir = os.path.join(logdir, f'exp{experiment_idx}')
-            try:
-                os.makedirs(experiment_dir)
-            except FileExistsError:
-                get_dir_out_of_the_way(experiment_dir)
-                os.makedirs(experiment_dir)
-
-            kwargs['logdir'] = experiment_dir
+        if kwargs['num_repetitions'] == 1:
+            os.makedirs(logdir, exist_ok=True)
             f(**kwargs)
+        else:
+            for experiment_idx in range(kwargs['num_repetitions']):
+                experiment_dir = os.path.join(logdir, f'exp{experiment_idx}')
+                try:
+                    os.makedirs(experiment_dir)
+                except FileExistsError:
+                    get_dir_out_of_the_way(experiment_dir)
+                    os.makedirs(experiment_dir)
+
+                kwargs['logdir'] = experiment_dir
+                f(**kwargs)
 
     return run

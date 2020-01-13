@@ -24,11 +24,13 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, num_repetitions
     env = gym.make('CartPole-v1')
     train_dir = os.path.join(logdir, 'train')
     events_dir = '%s/events_%d' % (logdir, task_id)
+    rollouts_dir = os.path.join(logdir, 'rollouts')
+    os.makedirs(rollouts_dir)
 
     if not (summary_tasks and task_id < summary_tasks):
         events_dir = None
     
-    rollouts = []
+    total_rewards = []
 
     developer = Developer(config, LanguageModel)
     with hire(developer, log_dir=train_dir, events_dir=events_dir, is_chief=is_chief) as employed_developer:
@@ -40,10 +42,10 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, num_repetitions
 
         while agent.sprints_elapsed < config.sprints:
             rollout = agent.attend_gym(env, max_reps=None, render=config.render)
-            rollouts.append(rollout)
+            total_rewards.append(rollout.total_reward)
 
-            with open(os.path.join(logdir, 'rollouts.dill'), 'wb') as f:
-                dill.dump(rollouts, f)
+            with open(os.path.join(rollouts_dir, f'{agent.sprints_elapsed}sprints_in.dill'), 'wb') as f:
+                dill.dump(rollout, f)
 
             with open(os.path.join(logdir, 'programs.txt'), 'w') as f:
                 f.writelines(p.code + '\n' for p in agent.executed_programs)
@@ -53,7 +55,9 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, num_repetitions
                 summary = str({
                     'episode_lengths': episode_lengths,
                     'sprint_length': agent.sprint_length,
-                    'longest_episode': max(episode_lengths)
+                    'longest_episode': max(episode_lengths),
+                    'total_rewards': total_rewards,
+                    'max_total_reward': max(total_rewards)
                 })
 
                 f.write(summary)

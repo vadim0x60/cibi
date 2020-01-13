@@ -29,7 +29,7 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, num_repetitions
     if not (summary_tasks and task_id < summary_tasks):
         events_dir = None
     
-    rollouts = []
+    total_rewards = []
     game_over = []
     lander_awake = []
 
@@ -42,12 +42,13 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, num_repetitions
                             syntax_error_reward=-500)
 
         while agent.sprints_elapsed < config.sprints:
-            rollouts.append(agent.attend_gym(env, max_reps=None, render=config.render))
+            rollout = agent.attend_gym(env, max_reps=None, render=config.render)
+            total_rewards.append(rollout.total_reward)
             game_over.append(env.game_over)
             lander_awake.append(env.lander.awake)
 
-            with open(os.path.join(logdir, 'rollouts.dill'), 'wb') as f:
-                dill.dump(rollouts, f)
+            with open(os.path.join(rollouts_dir, f'{agent.sprints_elapsed}sprints_in.dill'), 'wb') as f:
+                dill.dump(rollout, f)
 
             with open(os.path.join(logdir, 'programs.txt'), 'w') as f:
                 f.writelines(p.code + '\n' for p in agent.executed_programs)
@@ -56,7 +57,9 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, num_repetitions
                 summary = str({
                     'sprint_length': agent.sprint_length,
                     'game_over': game_over,
-                    'lander_awake': lander_awake
+                    'lander_awake': lander_awake,
+                    'total_rewards': total_rewards,
+                    'max_total_reward': max(total_rewards)
                 })
 
                 f.write(summary)

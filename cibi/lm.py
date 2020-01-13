@@ -622,7 +622,7 @@ class LanguageModel:
         % (tot_r, num_steps, result, code))
     text_summary = session.run(self.rl_text_summary_op,
                                {self.text_summary_placeholder: text})
-    logging.info(
+    logger.info(
         'Step %d.\t NPE: %d\t Result: %s.\t Tot R: %.2f.\t Length: %d. \tProgram: %s',
         step, npe, result, tot_r, num_steps, code)
     return text_summary
