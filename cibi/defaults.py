@@ -14,9 +14,9 @@ def default_config():
       agent=config_lib.OneOf(
           [config_lib.Config(
               algorithm='pg',
-              policy_lstm_sizes=[35,35],
+              policy_lstm_sizes=[50,50],
               # Set value_lstm_sizes to None to share weights with policy.
-              value_lstm_sizes=[35,35],
+              value_lstm_sizes=[50,50],
               obs_embedding_size=10,
               grad_clip_threshold=10.0,
               param_init_factor=1.0,

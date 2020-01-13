@@ -34,7 +34,9 @@ class State(object):
   AWAITING_INPUT = 'awaiting-input'
   FINISHED = 'finished'
 
-CHARS = ['>', '<', '^', '+', '-', '[', ']', '.', ',', '!', '0']
+SHORTHAND_ACTIONS = ['0', '1', '2', '3', '4']
+SHORTHAND_CELLS = ['a', 'b', 'c', 'd', 'e']
+CHARS = ['>', '<', '^', '+', '-', '[', ']', '.', ',', '!'] + SHORTHAND_ACTIONS + SHORTHAND_CELLS
 BF_EOS_INT = 0  # Also used as SOS (start of sequence).
 BF_EOS_CHAR = TEXT_EOS_CHAR = '_'
 BF_INT_TO_CHAR = [BF_EOS_CHAR] + CHARS
@@ -229,7 +231,7 @@ class Executable(Agent):
       # Add step to program trace.
       self.program_trace.append(ExecutionSnapshot(
           codeptr=self.codeptr, codechar=command, memptr=self.cellptr,
-          memval=self.cells[self.cellptr], memory=list(self.cells),
+          memval=self.read(), memory=list(self.cells),
           state=self.state, action_stack=self.action_stack))
 
   def value(self):
@@ -239,6 +241,19 @@ class Executable(Agent):
     if self.state != State.FINISHED:
       self.state = State.FINISHED
       self.result = Result.KILLED
+
+  def ensure_enough_cells(self):
+    cell_shortage = self.cellptr - len(self.cells) + 1
+    if cell_shortage > 0:
+      self.cells.extend(self.null_value for i in range(cell_shortage))
+
+  def read(self):
+    self.ensure_enough_cells()
+    return self.cells[self.cellptr]
+
+  def write(self, number):
+    self.ensure_enough_cells()
+    self.cells[self.cellptr] = number
 
   def step(self):
     if self.state == State.FINISHED:
@@ -269,13 +284,13 @@ class Executable(Agent):
 
     if command == '>':
       self.cellptr += 1
-      if self.cellptr == len(self.cells): self.cells.append(self.null_value)
 
     if command == '<':
       self.cellptr = 0 if self.cellptr <= 0 else self.cellptr - 1
 
     if command == '^':
-      self.cellptr = 0
+      # I don't trust languages without GOTO
+      self.cellptr = int(self.read())
 
     if command == '+':
       self.cells[self.cellptr] = self.cells[self.cellptr] + 1 if self.cells[self.cellptr] < (self.base - 1) else 0
@@ -283,14 +298,17 @@ class Executable(Agent):
     if command == '-':
       self.cells[self.cellptr] = self.cells[self.cellptr] - 1 if self.cells[self.cellptr] > 0 else (self.base - 1)
 
-    if command == '0':
-      self.cells[self.cellptr] = self.null_value
+    if command in SHORTHAND_ACTIONS:
+      self.write(SHORTHAND_ACTIONS.index(command))
 
-    if command == '[' and self.cells[self.cellptr] == 0: self.codeptr = self.bracemap[self.codeptr]
-    if command == ']' and self.cells[self.cellptr] != 0: self.codeptr = self.bracemap[self.codeptr]
+    if command in SHORTHAND_CELLS:
+      self.cellptr = SHORTHAND_CELLS.index(command)
 
-    if command == '.': self.action_stack.insert(0, self.cells[self.cellptr])
-    if command == '!': self.action_stack.append(self.cells[self.cellptr])
+    if command == '[' and self.read() == 0: self.codeptr = self.bracemap[self.codeptr]
+    if command == ']' and self.read() != 0: self.codeptr = self.bracemap[self.codeptr]
+
+    if command == '.': self.action_stack.insert(0, self.read())
+    if command == '!': self.action_stack.append(self.read())
 
     if command == ',':
       self.state = State.AWAITING_INPUT
