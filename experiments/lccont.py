@@ -19,9 +19,9 @@ import tensorflow as tf
 def run_gym_test(config, task_id, logdir, summary_tasks, master, num_repetitions):
     is_chief = (task_id == 0)
     logger = logging.getLogger('cibi')
-    logger.info('LunarLanderContinious-v2')
+    logger.info('LunarLanderContinuous-v2')
 
-    env = gym.make('LunarLanderContinious-v2')
+    env = gym.make('LunarLanderContinuous-v2')
 
     train_dir = os.path.join(logdir, 'train')
     events_dir = '%s/events_%d' % (logdir, task_id)
