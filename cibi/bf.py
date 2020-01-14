@@ -99,7 +99,7 @@ def observation_discretizer(observation_space, discretization_steps=32):
       discretized = no_bounds * observation 
       discretized += lower_bound_only * (high - observation)
       discretized += upper_bound_only * (observation - low)
-      discretized += both_bounds * (observation - low + (high - low) * discretization_steps)
+      discretized += both_bounds * (observation - low + discretization_steps / (high - low))
       return discretized.astype(np.int).tolist()
     return discretize   
   else:
@@ -252,8 +252,11 @@ class Executable(Agent):
     return self.cells[self.cellptr]
 
   def write(self, value):
-    if type(value) == int:
-      value = [value]
+    try:
+      value = [int(value)]
+    except (TypeError, ValueError):
+      pass
+
     self.ensure_enough_cells(len(value))
     writeptr = self.cellptr
     for number in value:
@@ -295,7 +298,9 @@ class Executable(Agent):
 
     if command == '^':
       # I don't trust languages without GOTO
-      self.cellptr = int(self.read())
+      goto = int(self.read())
+      if goto >= 0:
+        self.cellptr = goto
 
     if command == '+':
       value = self.read()
