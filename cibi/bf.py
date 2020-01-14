@@ -81,29 +81,29 @@ class ProgramFinishedError(ActionError):
     msg = f'Trying to execute program {code} that has finished with {program_result}'
     super().__init__(msg, program_result)
 
-class TuringMemoryWriter:
-  def __init__(self, observation_space, discretization_steps=32):
-    if type(observation_space) in (s.Discrete, s.MultiDiscrete, s.MultiBinary):
-      self.discretization_steps = 1
-    elif type(observation_space) == s.Box:
-      self.discretization_steps = discretization_steps
-    else:
-      raise NotImplementedError('Only Discrete, MultiDiscrete, MultiBinary and Box spaces are supported')
-    
-  def discretize(self, value):
-    return int(value * self.discretization_steps)
-    
-  def write(self, memory, cellptr, inp):
-    value_ptr = cellptr
-    for _, value in np.ndenumerate(inp):
-      discrete_value = self.discretize(value)
+def observation_discretizer(observation_space, discretization_steps=32):
+  if type(observation_space) is s.Discrete:
+    return lambda x: x
+  if type(observation_space) in (s.MultiDiscrete, s.MultiBinary):
+    return lambda x: x.astype(np.int).tolist()
+  elif type(observation_space) == s.Box:
+    lower_bound_only = observation_space.bounded_below * ~observation_space.bounded_above
+    upper_bound_only = observation_space.bounded_above * ~observation_space.bounded_below
+    both_bounds = observation_space.bounded_below * observation_space.bounded_above
+    no_bounds = ~observation_space.bounded_below * ~observation_space.bounded_above
 
-      # extend or rewrite
-      if value_ptr == len(memory): 
-        memory.append(discrete_value)
-      else:
-        memory[value_ptr] = discrete_value
-      value_ptr += 1
+    low = observation_space.low
+    high = observation_space.high
+
+    def discretize(observation):
+      discretized = no_bounds * observation 
+      discretized += lower_bound_only * (high - observation)
+      discretized += upper_bound_only * (observation - low)
+      discretized += both_bounds * (observation - low + (high - low) * discretization_steps)
+      return discretized.astype(np.int).tolist()
+    return discretize   
+  else:
+    raise NotImplementedError('Only Discrete, MultiDiscrete, MultiBinary and Box spaces are supported')
 
 class ActionSampler:
   def __init__(self, action_space, discretization_steps=32, default_action=None):
@@ -185,7 +185,7 @@ class ActionSampler:
         return sample
     
 class Executable(Agent):
-  def __init__(self, code, memory_writer, action_sampler,
+  def __init__(self, code, observation_discretizer, action_sampler,
                init_memory=None, base=256, null_value=0,
                max_steps=2 ** 20, require_correct_syntax=True, debug=False,
                cycle = False):
@@ -200,7 +200,7 @@ class Executable(Agent):
 
     self.is_valid = correct_syntax or not require_correct_syntax
 
-    self.memory_writer = memory_writer
+    self.observation_discretizer = observation_discretizer
     self.action_sampler = action_sampler
     
     self.init_memory = init_memory
@@ -242,8 +242,8 @@ class Executable(Agent):
       self.state = State.FINISHED
       self.result = Result.KILLED
 
-  def ensure_enough_cells(self):
-    cell_shortage = self.cellptr - len(self.cells) + 1
+  def ensure_enough_cells(self, cells_required=1):
+    cell_shortage = self.cellptr + cells_required - len(self.cells)
     if cell_shortage > 0:
       self.cells.extend(self.null_value for i in range(cell_shortage))
 
@@ -251,9 +251,14 @@ class Executable(Agent):
     self.ensure_enough_cells()
     return self.cells[self.cellptr]
 
-  def write(self, number):
-    self.ensure_enough_cells()
-    self.cells[self.cellptr] = number
+  def write(self, value):
+    if type(value) == int:
+      value = [value]
+    self.ensure_enough_cells(len(value))
+    writeptr = self.cellptr
+    for number in value:
+      self.cells[writeptr] = number
+      writeptr += 1
 
   def step(self):
     if self.state == State.FINISHED:
@@ -339,7 +344,7 @@ class Executable(Agent):
     self.state = State.EXECUTING
     self.record_snapshot(',')
 
-    self.memory_writer.write(self.cells, self.cellptr, inp)
+    self.write(self.observation_discretizer(inp))
 
     self.codeptr += 1
     self.steps += 1

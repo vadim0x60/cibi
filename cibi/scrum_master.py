@@ -65,7 +65,7 @@ class ScrumMaster(Agent):
                  cycle_programs=True, syntax_error_reward=0):
         self.developer = developer
         # TODO: config discretization steps
-        self.memory_writer = bf.TuringMemoryWriter(env.observation_space)
+        self.observation_discretizer = bf.observation_discretizer(env.observation_space)
         self.action_sampler = bf.ActionSampler(env.action_space)
         self.cycle_programs = cycle_programs
 
@@ -143,7 +143,7 @@ class ScrumMaster(Agent):
         programs = self.developer.write_programs()
 
         # Compile it (might get syntax errors, our developer doesn't check for that)
-        return [program.compile(memory_writer=self.memory_writer, 
+        return [program.compile(observation_discretizer=self.observation_discretizer, 
                                 action_sampler=self.action_sampler,
                                 cycle=self.cycle_programs) 
                 for program in programs]

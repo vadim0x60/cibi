@@ -12,7 +12,7 @@ from cibi.bf import Executable, ProgramFinishedError
 action_space = s.Discrete(1024)
 observation_space = s.Discrete(1024)
 
-memory_writer = bf.TuringMemoryWriter(observation_space)
+observation_discretizer = bf.observation_discretizer(observation_space)
 action_sampler = bf.ActionSampler(action_space)
 
 def shorten(seq, size_limit=20, head_size=5, tail_size=5):
@@ -34,7 +34,9 @@ def evaluate(code, **kwargs):
     # This are unit tests! Debug mode on by default
     kwargs['debug'] = True
 
-  agent = Executable(code, memory_writer=memory_writer, action_sampler=action_sampler, **kwargs)
+  agent = Executable(code, observation_discretizer=observation_discretizer, 
+                           action_sampler=action_sampler, 
+                           **kwargs)
 
   for x in input_buffer:
     agent.input(x)
