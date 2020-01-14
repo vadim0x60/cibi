@@ -293,10 +293,18 @@ class Executable(Agent):
       self.cellptr = int(self.read())
 
     if command == '+':
-      self.cells[self.cellptr] = self.cells[self.cellptr] + 1 if self.cells[self.cellptr] < (self.base - 1) else 0
+      value = self.read()
+      value += 1
+      if value == self.base:
+        value = 0
+      self.write(value)
 
     if command == '-':
-      self.cells[self.cellptr] = self.cells[self.cellptr] - 1 if self.cells[self.cellptr] > 0 else (self.base - 1)
+      value = self.read()
+      if value == 0:
+        value = self.base
+      value -= 1
+      self.write(value)
 
     if command in SHORTHAND_ACTIONS:
       self.write(SHORTHAND_ACTIONS.index(command))
