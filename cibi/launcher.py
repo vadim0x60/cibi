@@ -10,7 +10,7 @@ def task_launcher(f):
 
     @click.command()
     @click.option('--config', default='', type=str, help='Configuration.')
-    @click.option('--logdir', default='log', type=str, help='Absolute path where to write results.')
+    @click.option('--logdir', default='log/exp', type=str, help='Absolute path where to write results.')
     @click.option('--task-id', default=0, type=int, help='ID for this worker.')
     @click.option('--num-workers', default=1, type=int, help='How many workers there are.')
     @click.option('--num-repetitions', default=1, type=int, help='Number of times the same experiment will be run (globally across all workers). Each run is independent.')
