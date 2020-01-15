@@ -25,6 +25,7 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, num_repetitions
 
     train_dir = os.path.join(logdir, 'train')
     events_dir = '%s/events_%d' % (logdir, task_id)
+    rollouts_dir = os.path.join(logdir, 'rollouts')
 
     if not (summary_tasks and task_id < summary_tasks):
         events_dir = None

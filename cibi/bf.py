@@ -163,7 +163,7 @@ class ActionSampler:
     actions += bounded_below * self.lower_bound
     actions += bounded_above * (1 - bounded_below) * self.upper_bound
     actions += (bounded_below - bounded_above) * np.abs(discrete_actions)
-    actions += (1 - self.bounded_below) * (1 - self.bounded_above) * discrete_actions
+    actions += (1 - bounded_below) * (1 - bounded_above) * discrete_actions
 
     return actions
 
@@ -255,7 +255,7 @@ class Executable(Agent):
     try:
       value = [int(value)]
     except (TypeError, ValueError):
-      pass
+      value = [int(number) for number in value]
 
     self.ensure_enough_cells(len(value))
     writeptr = self.cellptr
