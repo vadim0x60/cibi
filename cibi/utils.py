@@ -586,6 +586,9 @@ def get_dir_out_of_the_way(path):
     import os
     import shutil
 
+    if not os.path.exists(path):
+      return
+
     parent, child = os.path.split(path)
     for alternative_name in alternative_names(child):
         alternative_path = os.path.join(parent, alternative_name)

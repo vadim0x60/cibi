@@ -24,28 +24,25 @@ def task_launcher(f):
     @click.option('--delayed-graph-cleanup', is_flag=True, help='If true, container for n-th run will not be reset until the (n+1)-th run is complete. This greatly reduces the chance that a worker is still using the n-th container when it is cleared.')
     def run(**kwargs):
         kwargs['config'] = default_config_with_updates(kwargs['config'])
-        
         logdir = kwargs['logdir']
-        os.makedirs(logdir, exist_ok = True)
-        parent_logger = logging.getLogger('cibi')
-        parent_logger.setLevel(kwargs['log_level'])
-        parent_logger.addHandler(logging.FileHandler(f'{logdir}/log.log'))
-
+        log_level = kwargs['log_level']
         kwargs = {k:v for k,v in kwargs.items() if k in relevant_options}
-        if kwargs['num_repetitions'] == 1:
-            get_dir_out_of_the_way(logdir)
-            os.makedirs(logdir)
-            f(**kwargs)
-        else:
-            for experiment_idx in range(kwargs['num_repetitions']):
-                experiment_dir = os.path.join(logdir, f'exp{experiment_idx}')
-                try:
-                    os.makedirs(experiment_dir)
-                except FileExistsError:
-                    get_dir_out_of_the_way(experiment_dir)
-                    os.makedirs(experiment_dir)
 
-                kwargs['logdir'] = experiment_dir
-                f(**kwargs)
+        if kwargs['num_repetitions'] == 1:
+            experiment_dirs = [logdir]
+        else:
+            os.makedirs(logdir, exist_ok = True)
+            experiment_dirs = [f'exp{idx}' for idx in range(kwargs['num_repetitions'])]
+            
+        for experiment_dir in experiment_dirs:
+            get_dir_out_of_the_way(experiment_dir)
+            os.makedirs(experiment_dir)
+
+            parent_logger = logging.getLogger('cibi')
+            parent_logger.setLevel(log_level)
+            parent_logger.addHandler(logging.FileHandler(f'{experiment_dir}/log.log'))
+
+            kwargs['logdir'] = experiment_dir
+            f(**kwargs)
 
     return run
