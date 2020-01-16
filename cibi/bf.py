@@ -81,43 +81,41 @@ class ProgramFinishedError(ActionError):
     msg = f'Trying to execute program {code} that has finished with {program_result}'
     super().__init__(msg, program_result)
 
-def observation_discretizer(observation_space, discretization_steps=32):
+def observation_discretizer(observation_space, discretization_steps=len(SHORTHAND_CELLS)):
   if type(observation_space) is s.Discrete:
     return lambda x: x
   if type(observation_space) in (s.MultiDiscrete, s.MultiBinary):
     return lambda x: x.astype(np.int).tolist()
   elif type(observation_space) == s.Box:
-    lower_bound_only = observation_space.bounded_below * ~observation_space.bounded_above
-    upper_bound_only = observation_space.bounded_above * ~observation_space.bounded_below
     both_bounds = observation_space.bounded_below * observation_space.bounded_above
-    no_bounds = ~observation_space.bounded_below * ~observation_space.bounded_above
-
-    low = observation_space.low
-    high = observation_space.high
 
     def discretize(observation):
-      discretized = no_bounds * observation 
-      discretized += lower_bound_only * (high - observation)
-      discretized += upper_bound_only * (observation - low)
-      discretized += both_bounds * (observation - low + discretization_steps / (high - low))
-      return discretized.astype(np.int).tolist()
+      discretized = np.zeros(observation_space.shape)
+      discretized[~both_bounds] = observation[~both_bounds]
+      low = observation_space.low[both_bounds]
+      high = observation_space.high[both_bounds]
+      discretized[both_bounds] = (observation[both_bounds] - low) / (high - low)
+      discretized *= discretization_steps
+      discretized = discretized.astype(np.int).tolist()
+      return discretized
     return discretize   
   else:
     raise NotImplementedError('Only Discrete, MultiDiscrete, MultiBinary and Box spaces are supported')
 
 class ActionSampler:
-  def __init__(self, action_space, discretization_steps=32, default_action=None):
+  def __init__(self, action_space, discretization_steps=len(SHORTHAND_ACTIONS), default_action=None):
     space_type = type(action_space)
     self.sample_shape = action_space.shape
     self.discretization_steps = discretization_steps
     self.just_a_number = False
 
     if space_type == s.Discrete:
-      self.lower_bound = np.array([1])
+      self.lower_bound = np.array([0])
       self.upper_bound = np.array([action_space.n - 1])
       self.bounded_below = np.array([True])
       self.bounded_above = np.array([True])
       self.default_action = 0
+      self.sample_shape = (1,)
       self.just_a_number = True
 
       # Optional, but mapping 0-15 to 0 and 16-31 to 1 
@@ -128,15 +126,15 @@ class ActionSampler:
     elif space_type == s.MultiDiscrete:
       self.upper_bound = action_space.nvec
       self.lower_bound = np.zeros_like(self.upper_bound)
-      self.bounded_above = np.ones_like(self.upper_bound)
-      self.bounded_below = np.ones_like(self.lower_bound)
+      self.bounded_above = np.full(self.upper_bound.shape, True)
+      self.bounded_below = np.full(self.lower_bound.shape, True)
       self.default_action = self.lower_bound
 
     elif space_type == s.MultiBinary:
       self.lower_bound = np.zeros(action_space.n)
       self.upper_bound = np.ones(action_space.n)
-      self.bounded_above = np.ones_like(self.upper_bound)
-      self.bounded_below = np.ones_like(self.lower_bound)
+      self.bounded_above = np.full(self.upper_bound.shape, True)
+      self.bounded_below = np.full(self.upper_bound.shape, True)
       self.default_action = self.lower_bound
 
     elif space_type == s.Box:
@@ -155,15 +153,22 @@ class ActionSampler:
 
   def undiscretize(self, discrete_actions):
     # See the paper for formula and explanation
-    bounded_below = self.bounded_below.astype(np.int)
-    bounded_above = self.bounded_above.astype(np.int)
+    discrete_actions = discrete_actions.astype(np.int)
 
-    double_bounded = bounded_below * bounded_above
-    actions = double_bounded * np.mod(discrete_actions, self.discretization_steps) * (self.upper_bound - self.lower_bound) / self.discretization_steps
-    actions += bounded_below * self.lower_bound
-    actions += bounded_above * (1 - bounded_below) * self.upper_bound
-    actions += (bounded_below - bounded_above) * np.abs(discrete_actions)
-    actions += (1 - bounded_below) * (1 - bounded_above) * discrete_actions
+    both_bounds = self.bounded_above * self.bounded_below
+    lower_bound_only = ~self.bounded_above * self.bounded_below
+    upper_bound_only = self.bounded_above * ~self.bounded_below
+    lower_bound = self.lower_bound[lower_bound_only]
+    upper_bound = self.upper_bound[upper_bound_only]
+
+    actions = np.zeros_like(discrete_actions)
+    actions[both_bounds] = np.mod(discrete_actions[both_bounds], self.discretization_steps) * (self.upper_bound[both_bounds] - self.lower_bound[both_bounds] + 1)
+    actions[~both_bounds] = discrete_actions[~both_bounds]
+    actions = actions / self.discretization_steps
+    flip = actions[lower_bound_only] < lower_bound
+    actions[lower_bound_only][flip] = lower_bound - actions[lower_bound_only][flip]
+    flip = actions[upper_bound_only] > upper_bound
+    actions[upper_bound_only][flip] = upper_bound - actions[upper_bound_only][flip]
 
     return actions
 
@@ -355,7 +360,8 @@ class Executable(Agent):
     self.steps += 1
 
   def act(self):
-    return self.action_sampler.sample(self.action_stack)
+    action = self.action_sampler.sample(self.action_stack)
+    return action
 
 class Program:
     code = ""
