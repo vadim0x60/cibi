@@ -49,8 +49,8 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, num_repetitions
             game_over.append(env.game_over)
             lander_awake.append(env.lander.awake)
 
-            with open(os.path.join(rollouts_dir, f'{agent.sprints_elapsed}sprints_in.dill'), 'wb') as f:
-                dill.dump(rollout, f)
+            #with open(os.path.join(rollouts_dir, f'{agent.sprints_elapsed}sprints_in.dill'), 'wb') as f:
+            #    dill.dump(rollout, f)
 
             with open(os.path.join(logdir, 'programs.txt'), 'w') as f:
                 f.writelines(p.code + '\n' for p in agent.executed_programs)
