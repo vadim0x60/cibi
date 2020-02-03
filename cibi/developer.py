@@ -297,6 +297,9 @@ class Developer(object):
       with tf.gfile.FastGFile(self.topk_file, 'w') as f:
         f.write(pickle.dumps(self.model.top_episodes))
 
+  def clean_up(self):
+    self.delete_replay_buffer()
+
 def init_fn(unused_sess):
   logger.info('No checkpoint found. Initialized global params.')
 
@@ -324,6 +327,7 @@ class EmployedDeveloper():
   def __exit__(self, type, value, tb):
     self.session_manager.__exit__(type, value, tb)
     self.session = None
+    self.developer.clean_up()
 
 def hire(developer, log_dir, events_dir=None, is_chief=True):
   with developer.graph.as_default():
