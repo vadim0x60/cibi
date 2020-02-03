@@ -94,7 +94,7 @@ class BfTest(tf.test.TestCase):
 
   def testUnmatchedBraces(self):
     self.assertCorrectOutput(
-        [3, 252, 1],
+        [3, -4, 1],
         evaluate('+++.]]]]>----.[[[[[>+.',
                     input_buffer=[],
                     require_correct_syntax=False))
