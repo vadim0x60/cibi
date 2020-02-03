@@ -5,4 +5,5 @@ six==1.*
 gym[box2d]==0.*
 click==7.*
 dill==0.*
+sortedcontainers==2.*
 git+git://github.com/akiani/gym-sepsis
