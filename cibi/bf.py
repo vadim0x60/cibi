@@ -34,12 +34,12 @@ class State(object):
   AWAITING_INPUT = 'awaiting-input'
   FINISHED = 'finished'
 
-SHORTHAND_ACTIONS = ['0', '1', '2', '3', '4']
-SHORTHAND_CELLS = ['a', 'b', 'c', 'd', 'e']
-CHARS = ['>', '<', '^', '+', '-', '[', ']', '.', ',', '!'] + SHORTHAND_ACTIONS + SHORTHAND_CELLS
+SHORTHAND_ACTIONS = '01234'
+SHORTHAND_CELLS = 'abcde'
+CHARS = '><^+-[].,!' + SHORTHAND_ACTIONS + SHORTHAND_CELLS
 BF_EOS_INT = 0  # Also used as SOS (start of sequence).
 BF_EOS_CHAR = TEXT_EOS_CHAR = '_'
-BF_INT_TO_CHAR = [BF_EOS_CHAR] + CHARS
+BF_INT_TO_CHAR = BF_EOS_CHAR + CHARS
 BF_CHAR_TO_INT = dict([(c, i) for i, c in enumerate(BF_INT_TO_CHAR)])
 
 def buildbracemap(code):
