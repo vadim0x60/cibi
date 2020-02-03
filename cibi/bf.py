@@ -191,7 +191,7 @@ class ActionSampler:
     
 class Executable(Agent):
   def __init__(self, code, observation_discretizer, action_sampler,
-               init_memory=None, base=256, null_value=0,
+               init_memory=None, null_value=0,
                max_steps=2 ** 20, require_correct_syntax=True, debug=False,
                cycle = False):
     self.code = code
@@ -211,7 +211,6 @@ class Executable(Agent):
     self.init_memory = init_memory
     self.max_steps = max_steps
     self.debug = debug
-    self.base = base
     self.null_value = null_value
     self.cycle = cycle
 
@@ -310,14 +309,10 @@ class Executable(Agent):
     if command == '+':
       value = self.read()
       value += 1
-      if value == self.base:
-        value = 0
       self.write(value)
 
     if command == '-':
       value = self.read()
-      if value == 0:
-        value = self.base
       value -= 1
       self.write(value)
 

@@ -81,11 +81,6 @@ class BfTest(tf.test.TestCase):
             '.>->+++..+++.>-.<<+[>[+>+]>>]<--------------.>>.+++.------.-------'
             '-.>+.>+.'))
 
-  def testBase(self):
-    self.assertCorrectOutput(
-        [1, 4],
-        evaluate('+.--.', input_buffer=[], base=5))
-
   def testInputBuffer(self):
     self.assertCorrectOutput(
         [2, 3, 4],
@@ -99,33 +94,31 @@ class BfTest(tf.test.TestCase):
 
   def testUnmatchedBraces(self):
     self.assertCorrectOutput(
-        [3, 6, 1],
+        [3, 252, 1],
         evaluate('+++.]]]]>----.[[[[[>+.',
                     input_buffer=[],
-                    base=10,
                     require_correct_syntax=False))
 
     agent = evaluate(
         '+++.]]]]>----.[[[[[>+.',
         input_buffer=[],
-        base=10,
         require_correct_syntax=True)
     self.assertEqual([], agent.action_stack)
     self.assertEqual(bf.Result.SYNTAX_ERROR, agent.result)
 
   def testMaxSteps(self):
-    agent = evaluate('+.[].', base=5, input_buffer=[], max_steps=100)
+    agent = evaluate('+.[].', input_buffer=[], max_steps=100)
     output = list(reversed(agent.action_stack))
     self.assertEqual([1], output)
     self.assertEqual(bf.Result.STEP_LIMIT, agent.result)
 
-    agent = evaluate('+.[-].', base=5, input_buffer=[], max_steps=100)
+    agent = evaluate('+.[-].', input_buffer=[], max_steps=100)
     output = list(reversed(agent.action_stack))
     self.assertEqual([1, 0], output)
     self.assertEqual(bf.Result.SUCCESS, agent.result)
 
   def testOutputMemory(self):
-    agent = evaluate('+>++>+++>++++.', base=256, input_buffer=[])
+    agent = evaluate('+>++>+++>++++.', input_buffer=[])
     output = list(reversed(agent.action_stack))
     self.assertEqual([4], output)
     self.assertEqual(bf.Result.SUCCESS, agent.result)
@@ -133,7 +126,7 @@ class BfTest(tf.test.TestCase):
 
   def testProgramTrace(self):
     es = bf.ExecutionSnapshot
-    agent = evaluate(',[.>,].', base=256, input_buffer=[2, 1], debug=True)
+    agent = evaluate(',[.>,].', input_buffer=[2, 1], debug=True)
     self.assertEqual(
         [es(codeptr=0, codechar=',', memptr=0, memval=0, memory=[0], action_stack=[0, 1, 2], state='executing'), 
          es(codeptr=0, codechar=',', memptr=0, memval=0, memory=[0], action_stack=[0, 1, 2], state='awaiting-input'), 
