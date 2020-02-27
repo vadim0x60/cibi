@@ -42,6 +42,14 @@ BF_EOS_CHAR = TEXT_EOS_CHAR = '_'
 BF_INT_TO_CHAR = BF_EOS_CHAR + CHARS
 BF_CHAR_TO_INT = dict([(c, i) for i, c in enumerate(BF_INT_TO_CHAR)])
 
+def bf_int_to_char(code_indices):
+  code = ''.join(BF_INT_TO_CHAR[i] for i in code_indices)
+  return code
+
+def bf_char_to_int(code):
+  code_indices = [BF_CHAR_TO_INT[c] for c in code]
+  return code_indices
+
 def buildbracemap(code):
   """Build jump map.
 

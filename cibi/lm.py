@@ -19,7 +19,7 @@ import tensorflow as tf
 import cibi.rollout as rollout_lib  # brain coder
 from cibi import utils
 from cibi import bf
-from cibi.bf import BF_EOS_INT, BF_EOS_CHAR, BF_INT_TO_CHAR, BF_CHAR_TO_INT
+from cibi.bf import BF_EOS_INT, BF_EOS_CHAR, BF_INT_TO_CHAR, BF_CHAR_TO_INT, bf_int_to_char, bf_char_to_int
 
 import logging
 logger = logging.getLogger(f'cibi.{__file__}')
@@ -682,7 +682,7 @@ class LanguageModel:
     for actions, value_estimate, episode_length, action_log_probs in zip(
         batch_actions, batch_values, episode_lengths, log_probs
       ):
-      code = ''.join([BF_INT_TO_CHAR[a] for a in actions[:episode_length]])
+      code = bf_int_to_char(actions[:episode_length])
       if code[-1] == BF_EOS_CHAR:
         code = code[:-1]
 
