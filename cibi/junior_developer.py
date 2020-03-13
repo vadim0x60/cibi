@@ -18,8 +18,7 @@ def prune(program_pool, program_qualities, strategy):
     old_code = select(program_pool, program_qualities)[0].code
     logger.info(f'pruning {old_code}')
     new_code = re.sub(f'[{cell_actions}]+(?=[{bf.SHORTHAND_CELLS}])', '', old_code)
-    if new_code != old_code:
-        program_pool.append(bf.Program(new_code))
+    return [bf.Program(new_code)]
 
 def mut_with_number_arrays(mutate_over_numbers):
     def mutate_over_chars(old_code, indpb):
@@ -43,8 +42,7 @@ def mutate(program_pool, program_qualities, strategy):
     mutation_name, mutation = select(list(mutation_modes.items()), weights=strategy['mutation_modes_distribution'])[0]
     logger.info(f'{mutation_name} mutation of {old_code}')
     new_code = ''.join(mutation(list(old_code), strategy['indpb']))
-    if old_code != new_code:
-        program_pool.append(bf.Program(new_code))
+    return [bf.Program(new_code)]
 
 def cx_with_number_arrays(crossover_over_numbers):
     def crossover_over_chars(c1, c2, indpb):
@@ -73,8 +71,7 @@ def mate(program_pool, program_qualities, strategy):
     crossover_name, crossover = select(list(mating_modes.items()), weights=strategy['mating_modes_distribution'])[0]
     logger.info(f'{crossover_name} crossover between {code1} and {code2}')
     crossover(code1, code2, strategy['indpb'])
-    program_pool.append(bf.Program(''.join(code1)))
-    program_pool.append(bf.Program(''.join(code2)))
+    return [bf.Program(''.join(code1)), bf.Program(''.join(code2))]
 
 available_actions = {
     'prune': prune,
@@ -116,19 +113,4 @@ class JuniorDeveloper():
         action_distribution = self.strategy['action_distribution']
         action_name, act = select(list(available_actions.items()), weights=action_distribution)[0]
         logger.info(f'Junior developer decided to {action_name}')
-        act(program_pool, program_qualities, self.strategy)
-
-if __name__ == '__main__':
-    import logging.handlers
-    logger.setLevel(logging.INFO)
-    logger.addHandler(logging.StreamHandler())
-    dev = JuniorDeveloper()
-    program_pool = [
-        "+.>4ae.",
-        "+.e.4e",
-        "2.c-[4c,][4][]+>e3-",
-        "c1,>[d,+..2]e<"
-    ]
-    program_pool = [bf.Program(p) for p in program_pool]
-    dev.develop(program_pool, np.ones(4))
-    print([p.code for p in program_pool])
+        return act(program_pool, program_qualities, self.strategy)
