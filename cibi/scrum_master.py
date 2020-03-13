@@ -35,7 +35,7 @@ def programs_as_rl_episodes(programs):
   episode_code_strings = [program.code
                           for program in programs]
   episode_actions = utils.stack_pad(
-                    [[bf.BF_CHAR_TO_INT[c] for c in program.code] 
+                    [bf.bf_char_to_int(program.code)
                      for program in programs], 
                      pad_axes=0)
   episode_actions = np.array(episode_actions)
@@ -84,7 +84,7 @@ class ScrumMaster(Agent):
 
     def init(self):
         if self.rewards:
-            self.executed_programs[-1].rewards = self.rewards
+            self.executed_programs[-1].rewards.extend(self.rewards)
             self.rewards = []
             self.programs_for_reflection.append(self.executed_programs[-1])
         self.executed_programs[-1].init()
@@ -152,7 +152,7 @@ class ScrumMaster(Agent):
         if len(self.programs_for_execution) == 0:
             self.programs_for_execution = self.make_executables()
 
-        self.executed_programs[-1].rewards = self.rewards
+        self.executed_programs[-1].rewards.extend(self.rewards)
         self.rewards = []
         self.programs_for_reflection.append(self.executed_programs[-1])
         self.executed_programs.append(self.programs_for_execution.pop())
