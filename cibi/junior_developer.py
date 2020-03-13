@@ -109,7 +109,7 @@ class JuniorDeveloper():
         else:
             self.strategy = default_strategy
 
-    def develop(self, program_pool, program_qualities):
+    def write_programs(self, program_pool, program_qualities):
         action_distribution = self.strategy['action_distribution']
         action_name, act = select(list(available_actions.items()), weights=action_distribution)[0]
         logger.info(f'Junior developer decided to {action_name}')

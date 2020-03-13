@@ -18,4 +18,4 @@ program_pool = [
     "c1,>[d,+..2]e<"
 ]
 program_pool = [bf.Program(p) for p in program_pool]
-print([p.code for p in dev.develop(program_pool, np.ones(4))])
+print([p.code for p in dev.write_programs(program_pool, np.ones(4))])
