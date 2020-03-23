@@ -1,5 +1,5 @@
 from cibi.scrum_master import ScrumMaster
-from cibi.developer import Developer, hire
+from cibi.senior_developer import SeniorDeveloper, hire
 from cibi.lm import LanguageModel
 from cibi.defaults import default_config_with_updates
 from cibi.launcher import task_launcher
@@ -57,7 +57,7 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, num_repetitions
     events_dir = '%s/events_%d' % (logdir, task_id)
     logger.info('Events directory: %s', events_dir)
 
-    developer = Developer(config, LanguageModel)
+    developer = SeniorDeveloper(config, LanguageModel)
 
     if not (summary_tasks and task_id < summary_tasks):
         events_dir = None

@@ -3,57 +3,10 @@ from cibi import bf
 from cibi import utils
 
 import numpy as np
-from collections import namedtuple
-
-Reinforcement = namedtuple(
-    'Reinforcement',
-    ['episode_count', 'episode_lengths', 'episode_code_strings', 
-     'episode_actions', 'action_rewards', 'episode_rewards', 'episode_values', 'episode_results'])
-
-def programs_as_rl_episodes(programs): 
-  episode_rewards = np.array(
-    [sum(program.rewards)
-     for program in programs]
-  )
-  episode_lengths = np.array(
-    [len(program.code) 
-     for program in programs]
-  )
-  # We only reward the last character
-  # Everything else is a preparation for dat final punch
-  action_rewards = utils.stack_pad(
-    [[0] * (episode_length - 1) + [episode_reward]
-     for episode_reward, episode_length in zip(episode_rewards, episode_lengths)],
-     pad_axes=0
-  )
-  action_rewards = np.array(action_rewards)
-  
-  episode_values = np.array(
-    [program.value_estimate
-     for program in programs]
-  )
-  episode_code_strings = [program.code
-                          for program in programs]
-  episode_actions = utils.stack_pad(
-                    [bf.bf_char_to_int(program.code)
-                     for program in programs], 
-                     pad_axes=0)
-  episode_actions = np.array(episode_actions)
-  episode_results = [program.result
-                     for program in programs]
-  
-  return Reinforcement(episode_count = len(episode_lengths),
-                       episode_lengths=episode_lengths,
-                       action_rewards=action_rewards,
-                       episode_rewards=episode_rewards,
-                       episode_values=episode_values,
-                       episode_code_strings=episode_code_strings,
-                       episode_actions=episode_actions,
-                       episode_results=episode_results)
 
 class ScrumMaster(Agent):
     """
-    Solves reinforcement learning tasks by managing a Developer
+    Solves reinforcement learning tasks by managing Developers
     - directing them to write programs
     - forcing them to reprogram if the programs don't compile
     - giving them positive and negative reinforcement
@@ -76,48 +29,72 @@ class ScrumMaster(Agent):
         self.stretch_sprints = stretch_sprints
         self.sprints_elapsed = 0
 
-        self.programs_for_reflection = []
-        self.rewards = []
+        self.dev_branch_programs = []
 
-        self.programs_for_execution = self.make_executables()
-        self.executed_programs = [self.programs_for_execution.pop()]
+        self.feedback_branch_programs = []
+        self.feedback_branch_qualities = []
+
+        self.archive_branch_programs = []
+        self.archive_branch_qualities = []
+
+        self.prod_program = None
+        self.prod_rewards = []
+
+    def finalize_episode(self):
+        if self.prod_rewards:
+            # FIXME This is a temporary assertion
+            # In principle, syntax_error_reward can be higher than low episode reward
+            assert sum(self.prod_rewards) >= 2 * self.syntax_error_reward, self.prod_rewards
+            self.feedback_branch_qualities.append(sum(self.prod_rewards))
+            self.prod_rewards = []
+            self.feedback_branch_programs.append(self.prod_program)
+            self.prod_program = None
 
     def init(self):
-        if self.rewards:
-            self.executed_programs[-1].rewards.extend(self.rewards)
-            self.rewards = []
-            self.programs_for_reflection.append(self.executed_programs[-1])
-        self.executed_programs[-1].init()
+        self.finalize_episode()
+        if not self.prod_program:
+            self.reprogram()
+        self.prod_program.init()
 
     def input(self, inp):
         try:
-            self.executed_programs[-1].input(inp)
+            self.prod_program.input(inp)
         except bf.ProgramFinishedError:
-            if self.executed_programs[-1].result != bf.Result.SUCCESS:
-                self.reward(self.syntax_error_reward, force_reprogram=True)
+            if self.prod_program.result != bf.Result.SUCCESS:
+                self.prod_rewards = [self.syntax_error_reward]
+                self.reprogram()
                 self.input(inp)
             else:
                 raise
 
     def act(self):
         try:
-            action = self.executed_programs[-1].act()
+            action = self.prod_program.act()
             return action
         except bf.ProgramFinishedError:
-            if self.executed_programs[-1].result != bf.Result.SUCCESS:
-                self.reward(self.syntax_error_reward, force_reprogram=True)
+            if self.prod_program.result != bf.Result.SUCCESS:
+                self.prod_rewards = [self.syntax_error_reward]
+                self.reprogram()
                 return self.act()
             else:
                 raise
 
     def value(self):
-        return self.executed_programs[-1].value()
+        return self.prod_program.value()
 
     def retrospective(self):
-        if self.programs_for_reflection:
-            reinforcement = programs_as_rl_episodes(self.programs_for_reflection)
-            self.developer.reflect(reinforcement)
-            self.programs_for_reflection = []
+        """Give the developer feedback on his code and archive said code"""
+
+        assert len(self.feedback_branch_programs) == len(self.feedback_branch_qualities)
+
+        if self.feedback_branch_programs:
+            self.developer.accept_feedback(self.feedback_branch_programs, self.feedback_branch_qualities)
+
+            self.archive_branch_programs.extend(self.feedback_branch_programs)
+            self.archive_branch_qualities.extend(self.feedback_branch_qualities)
+
+            self.feedback_branch_programs = []
+            self.feedback_branch_qualities = []
 
     def done(self):
         self.retrospective()
@@ -125,37 +102,35 @@ class ScrumMaster(Agent):
         if self.sprint_ttl <= 0:
             self.reprogram()
 
-    def reward(self, reward, force_reprogram=False):
-        self.rewards.append(reward)
+    def reward(self, reward):
+        self.prod_rewards.append(reward)
         self.sprint_ttl -= 1
-
-        if force_reprogram:
-            self.reprogram()
             
         if not self.stretch_sprints and self.sprint_ttl == 0:
             self.reprogram()
 
-    def make_executables(self):
+    def write_programs(self):
         # If we have something to discuss, discuss before writing new code
         self.retrospective()
 
         # Get the developer to write code
-        programs = self.developer.write_programs()
+        programs = self.developer.write_programs(self.archive_branch_programs, self.archive_branch_qualities)
 
         # Compile it (might get syntax errors, our developer doesn't check for that)
-        return [program.compile(observation_discretizer=self.observation_discretizer, 
-                                action_sampler=self.action_sampler,
-                                cycle=self.cycle_programs) 
-                for program in programs]
+        programs = [program.compile(observation_discretizer=self.observation_discretizer, 
+                                    action_sampler=self.action_sampler,
+                                    cycle=self.cycle_programs) 
+                    for program in programs]
+
+        # Add it to the dev branch
+        self.dev_branch_programs.extend(programs)
 
     def reprogram(self):
-        if len(self.programs_for_execution) == 0:
-            self.programs_for_execution = self.make_executables()
+        if not self.dev_branch_programs:
+            self.write_programs()
 
-        self.executed_programs[-1].rewards.extend(self.rewards)
-        self.rewards = []
-        self.programs_for_reflection.append(self.executed_programs[-1])
-        self.executed_programs.append(self.programs_for_execution.pop())
+        self.finalize_episode()
+        self.prod_program = self.dev_branch_programs.pop()
 
         self.sprint_ttl = self.sprint_length
         self.sprints_elapsed += 1

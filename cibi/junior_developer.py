@@ -1,4 +1,6 @@
 from cibi import bf
+from cibi.developer import Developer
+
 from deap.tools import crossover, mutation
 import re
 import numpy as np
@@ -101,7 +103,7 @@ def parse_strategy_vector(strategy_vector):
         strategy_vector = strategy_vector[param_size:]
     return strategy
 
-class JuniorDeveloper():
+class JuniorDeveloper(Developer):
     def __init__(self, strategy_vector=None):
         if strategy_vector:
             self.strategy_vector = strategy_vector
@@ -114,3 +116,6 @@ class JuniorDeveloper():
         action_name, act = select(list(available_actions.items()), weights=action_distribution)[0]
         logger.info(f'Junior developer decided to {action_name}')
         return act(program_pool, program_qualities, self.strategy)
+
+    def accept_feedback(self, programs, program_qualities):
+        logger.info('If they were good at processing feedback, they wouldn\'t be a junior developer')

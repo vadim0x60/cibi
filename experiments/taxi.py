@@ -1,5 +1,5 @@
 from cibi.scrum_master import ScrumMaster
-from cibi.developer import Developer, hire
+from cibi.senior_developer import SeniorDeveloper, hire
 from cibi.lm import LanguageModel
 from cibi.defaults import default_config_with_updates
 from cibi.launcher import task_launcher
@@ -34,7 +34,7 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, num_repetitions
     total_rewards = []
     episode_lengths = []
 
-    developer = Developer(config, LanguageModel)
+    developer = SeniorDeveloper(config, LanguageModel)
     with hire(developer, log_dir=train_dir, events_dir=events_dir, is_chief=is_chief) as employed_developer:
         agent = ScrumMaster(employed_developer, env,
                             cycle_programs=True,
@@ -51,7 +51,7 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, num_repetitions
             #    dill.dump(rollout, f)
 
             with open(os.path.join(logdir, 'programs.txt'), 'w') as f:
-                f.writelines(p.code + '\n' for p in agent.executed_programs)
+                f.writelines(p.code + '\n' for p in agent.archive_branch_programs)
 
             with open(os.path.join(logdir, 'summary.txt'), 'w') as f:
                 summary = str({
