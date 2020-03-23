@@ -3,6 +3,7 @@ from cibi import bf
 from cibi import utils
 
 import numpy as np
+import itertools
 
 class ScrumMaster(Agent):
     """
@@ -14,9 +15,10 @@ class ScrumMaster(Agent):
     At the moment, Scrum Master is only able to manage one developer
     """
 
-    def __init__(self, developer, env, sprint_length, stretch_sprints=True,
+    def __init__(self, developers, env, sprint_length, stretch_sprints=True,
                  cycle_programs=True, syntax_error_reward=0):
-        self.developer = developer
+        self.developers = itertools.cycle(developers)
+        self.lead_developer = next(self.developers)
         # TODO: config discretization steps
         self.observation_discretizer = bf.observation_discretizer(env.observation_space)
         self.action_sampler = bf.ActionSampler(env.action_space)
@@ -85,7 +87,7 @@ class ScrumMaster(Agent):
         assert len(self.feedback_branch_programs) == len(self.feedback_branch_qualities)
 
         if self.feedback_branch_programs:
-            self.developer.accept_feedback(self.feedback_branch_programs, self.feedback_branch_qualities)
+            self.lead_developer.accept_feedback(self.feedback_branch_programs, self.feedback_branch_qualities)
 
             self.archive_branch_programs.extend(self.feedback_branch_programs)
             self.archive_branch_qualities.extend(self.feedback_branch_qualities)
@@ -111,7 +113,7 @@ class ScrumMaster(Agent):
         self.retrospective()
 
         # Get the developer to write code
-        programs = self.developer.write_programs(self.archive_branch_programs, self.archive_branch_qualities)
+        programs = self.lead_developer.write_programs(self.archive_branch_programs, self.archive_branch_qualities)
 
         # Compile it (might get syntax errors, our developer doesn't check for that)
         programs = [program.compile(observation_discretizer=self.observation_discretizer, 
@@ -131,3 +133,7 @@ class ScrumMaster(Agent):
 
         self.sprint_ttl = self.sprint_length
         self.sprints_elapsed += 1
+        
+        # We are a flat team
+        # Lead developer rotates every sprint
+        self.lead_developer = next(self.developers)
