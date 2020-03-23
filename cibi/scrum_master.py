@@ -42,9 +42,6 @@ class ScrumMaster(Agent):
 
     def finalize_episode(self):
         if self.prod_rewards:
-            # FIXME This is a temporary assertion
-            # In principle, syntax_error_reward can be higher than low episode reward
-            assert sum(self.prod_rewards) >= 2 * self.syntax_error_reward, self.prod_rewards
             self.feedback_branch_qualities.append(sum(self.prod_rewards))
             self.prod_rewards = []
             self.feedback_branch_programs.append(self.prod_program)
