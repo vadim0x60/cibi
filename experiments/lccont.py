@@ -1,5 +1,6 @@
 from cibi.scrum_master import ScrumMaster
 from cibi.senior_developer import SeniorDeveloper, hire
+from cibi.junior_developer import JuniorDeveloper
 from cibi.lm import LanguageModel
 from cibi.defaults import default_config_with_updates
 from cibi.launcher import task_launcher
@@ -36,8 +37,9 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, num_repetitions
     lander_awake = []
 
     developer = SeniorDeveloper(config, LanguageModel)
-    with hire(developer, log_dir=train_dir, events_dir=events_dir, is_chief=is_chief) as employed_developer:
-        agent = ScrumMaster(employed_developer, env,
+    with hire(developer, log_dir=train_dir, events_dir=events_dir, is_chief=is_chief) as senior_developer:
+        junior_developer = JuniorDeveloper()
+        agent = ScrumMaster([senior_developer, junior_developer], env,
                             cycle_programs=True,
                             sprint_length=1000,
                             stretch_sprints=True,
