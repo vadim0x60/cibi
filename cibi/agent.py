@@ -63,3 +63,19 @@ class Agent():
         env.close()
 
         return rollout
+
+class RandomAgent(Agent):
+    def __init__(self, action_space):
+        self.action_space = action_space
+
+    def act(self):
+        return self.action_space.sample()
+
+    def reward(self, reward):
+        pass
+
+    def init(self):
+        pass
+
+    def done(self):
+        pass

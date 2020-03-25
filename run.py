@@ -1,5 +1,6 @@
 import click
 from cibi import bf
+from cibi.agent import RandomAgent
 from sortedcontainers import SortedDict
 import gym
 import time
@@ -36,8 +37,11 @@ def run(env_name, input_code, avg, input_file, output_file):
         error = False
 
         for idx in range(avg):
-            program = bf.Program(code)
-            executable = program.compile(observation_discretizer, action_sampler, cycle=True)
+            if code == 'random':
+                executable = RandomAgent(env.action_space)
+            else:
+                program = bf.Program(code)
+                executable = program.compile(observation_discretizer, action_sampler, cycle=True)
             rollout = executable.attend_gym(env, render = render)
             if executable.result in (bf.Result.SYNTAX_ERROR, bf.Result.STEP_LIMIT):
                 error = True
