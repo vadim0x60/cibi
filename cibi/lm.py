@@ -40,14 +40,8 @@ ReflectionResult = namedtuple(
     'ReflectionResult',
     ['global_step', 'global_npe', 'summaries_list', 'gradients_dict'])
 
-def join(a, b):
-  # Concat a and b along 0-th dim.
-  if a is None or len(a) == 0:  # pylint: disable=g-explicit-length-test
-    return b
-  if b is None or len(b) == 0:  # pylint: disable=g-explicit-length-test
-    return a
-  return np.concatenate((a, b))
-
+def list_(x):
+  return [] if x is None else list(x)
 
 def make_optimizer(kind, lr):
   if kind == 'sgd':
@@ -543,6 +537,37 @@ class LanguageModel:
               'is/log_norm_replay_weights', self.log_norm_replay_weights_ph),
       ])
 
+  def _compute_iw(self, policy_log_probs, replay_weights):
+    """Compute importance weights for a batch of episodes.
+
+    Arguments are iterables of length batch_size.
+
+    Args:
+      policy_log_probs: Log probability of each episode under the current
+          policy.
+      replay_weights: Weight of each episode in the replay buffer. 0 for
+          episodes not sampled from the replay buffer (i.e. sampled from the
+          policy).
+
+    Returns:
+      Numpy array of shape [batch_size] containing the importance weight for
+      each episode in the batch.
+    """
+    log_total_replay_weight = log(self.experience_replay.total_weight)
+
+    # importance weight
+    # = 1 / [(1 - a) + a * exp(log(replay_weight / total_weight / p))]
+    # = 1 / ((1-a) + a*q/p)
+    a = float(self.replay_alpha)
+    a_com = 1.0 - a  # compliment of a
+    importance_weights = np.asarray(
+        [1.0 / (a_com
+                + a * exp((log(replay_weight) - log_total_replay_weight)
+                          - log_p))
+         if replay_weight > 0 else 1.0 / a_com
+         for log_p, replay_weight
+         in zip(policy_log_probs, replay_weights)])
+    return importance_weights
   
   def make_summary_ops(self):
     """Construct summary ops for the model."""
@@ -688,7 +713,7 @@ class LanguageModel:
 
       logger.info(f'Wrote program: {code}')
 
-      program = bf.Program(code, log_probs=log_probs, value_estimate=value_estimate)
+      program = bf.Program(code, log_probs=action_log_probs, value_estimate=value_estimate)
       programs.append(program)
 
     return programs
@@ -809,7 +834,7 @@ class LanguageModel:
       p = num_programs_from_policy
       
       batch_targets, batch_returns = process_episodes(
-          reinforcement.episode_rewards, reinforcement.episode_lengths[:p], a2c=False,
+          reinforcement.action_rewards[:p], reinforcement.episode_lengths[:p], a2c=False,
           baselines=self.ema_by_len)
       batch_policy_multipliers = batch_targets
       batch_emp_values = [[]]
@@ -854,7 +879,7 @@ class LanguageModel:
             reinforcement.episode_actions[i, :l]
             for i, l in enumerate(adjusted_lengths)]
         chosen_log_probs = [
-            np.choose(separate_actions[i], log_probs[i, :l].T)
+            np.choose(separate_actions[i], reinforcement.action_log_probs[i, :l].T)
             for i, l in enumerate(adjusted_lengths)]
         new_experiences = [
             (separate_actions[i],
@@ -879,25 +904,21 @@ class LanguageModel:
         # Look for new experiences in replay buffer. Assign weight if an episode
         # is in the buffer.
         on_policy_weights = [0] * num_programs_from_policy
-        for i, cs in enumerate(reinforcement.episode_code_strings):
+        for i, cs in enumerate(reinforcement.episode_code_strings[:num_programs_from_policy]):
           if self.experience_replay.has_key(cs):
             on_policy_weights[i] = self.experience_replay.get_weight(cs)
 
       # Randomly select on-policy or off policy episodes to train on.
-      combined_actions = join(replay_actions, on_policy_actions)
-      combined_policy_multipliers = join(
-          replay_policy_multipliers, on_policy_policy_multipliers)
-      combined_adjusted_lengths = join(
-          replay_adjusted_lengths, on_policy_adjusted_lengths)
-      combined_returns = join(replay_returns, on_policy_returns)
-      combined_actions = utils.stack_pad(combined_actions, pad_axes=0)
-      combined_policy_multipliers = utils.stack_pad(combined_policy_multipliers,
+      combined_adjusted_lengths = list_(replay_adjusted_lengths) + list_(on_policy_adjusted_lengths)
+      combined_returns = utils.stack_pad(list_(replay_returns) + list_(on_policy_returns), pad_axes=0)
+      combined_actions = utils.stack_pad(list_(replay_actions) + list_(on_policy_actions), pad_axes=0)
+      combined_policy_multipliers = utils.stack_pad(list_(replay_policy_multipliers) + list_(on_policy_policy_multipliers),
                                                     pad_axes=0)
       # P
-      combined_on_policy_log_probs = join(replay_log_probs, on_policy_log_probs)
+      combined_on_policy_log_probs = list_(replay_log_probs) + list_(on_policy_log_probs)
       # Q
       # Assume weight is zero for all sequences sampled from the policy.
-      combined_q_weights = join(replay_weights, on_policy_weights)
+      combined_q_weights = list_(replay_weights) + list_(on_policy_weights)
 
       # Importance adjustment. Naive formulation:
       # E_{x~p}[f(x)] ~= 1/N sum_{x~p}(f(x)) ~= 1/N sum_{x~q}(f(x) * p(x)/q(x)).
@@ -952,8 +973,8 @@ class LanguageModel:
       # Add to experience replay buffer.
       self.experience_replay.add_many(
           objs=new_experiences,
-          weights=[exp(r / self.replay_temperature) for r in batch_tot_r],
-          keys=reinforcement.episode_code_strings)
+          weights=[exp(r / self.replay_temperature) for r in reinforcement.episode_rewards[:num_programs_from_policy]],
+          keys=reinforcement.episode_code_strings[:num_programs_from_policy])
 
     # Update program count.
     session.run(
@@ -1060,7 +1081,7 @@ def process_episodes(
         [batch_size, max_sequence_length].
   """
   num_programs = len(batch_rewards)
-  assert num_programs <= len(episode_lengths)
+  assert num_programs <= len(episode_lengths), f'Got more program lengths ({len(episode_lengths)}) than programs ({num_programs})'
   batch_returns = [None] * num_programs
   batch_targets = [None] * num_programs
   for i in xrange(num_programs):
@@ -1078,7 +1099,7 @@ def process_episodes(
       # Compute advantage.
       assert batch_values is not None
       episode_values = batch_values[i, :episode_length]
-      episode_rewards = batch_rewards[i, :episode_length]
+      episode_rewards = batch_rewards[i]
       emp_val, gen_adv = rollout_lib.discounted_advantage_and_rewards(
           episode_rewards, episode_values, gamma=1.0, lambda_=1.0)
       batch_returns[i] = emp_val
@@ -1087,7 +1108,7 @@ def process_episodes(
       # Compute return for each timestep. See section 3 of
       # https://arxiv.org/pdf/1602.01783.pdf
       assert baselines is not None
-      empirical_returns = rollout_lib.discount(batch_rewards[i, :episode_length], gamma=1.0)
+      empirical_returns = rollout_lib.discount(batch_rewards[i], gamma=1.0)
       targets = [None] * episode_length
       for j in xrange(episode_length):
         targets[j] = empirical_returns[j] - baselines[j]

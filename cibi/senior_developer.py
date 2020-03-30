@@ -15,7 +15,7 @@ logger = logging.getLogger(f'cibi.{__file__}')
 Reinforcement = namedtuple(
     'Reinforcement',
     ['episode_count', 'episode_lengths', 'episode_code_strings', 
-     'episode_actions', 'action_rewards', 'episode_rewards', 'episode_values', 'episode_results'])
+     'episode_actions', 'action_rewards', 'action_log_probs', 'episode_rewards', 'episode_values', 'episode_results'])
 
 def calculate_reinforcement(programs, episode_rewards): 
   assert len(programs) == len(episode_rewards), f'{len(programs)} programs != {len(episode_rewards)} rewards'
@@ -33,6 +33,7 @@ def calculate_reinforcement(programs, episode_rewards):
      pad_axes=0
   )
   action_rewards = np.array(action_rewards)
+  action_log_probs = utils.stack_pad([program.log_probs for program in programs], pad_axes=0)
   
   episode_values = np.array(
     [program.value_estimate
@@ -44,13 +45,14 @@ def calculate_reinforcement(programs, episode_rewards):
                     [bf_char_to_int(program.code)
                      for program in programs], 
                      pad_axes=0)
-  episode_actions = np.array(episode_actions)
+  episode_actions = np.array(episode_actions, dtype=int)
   episode_results = [program.result
                      for program in programs]
-  
+
   return Reinforcement(episode_count = len(episode_lengths),
                        episode_lengths=episode_lengths,
                        action_rewards=action_rewards,
+                       action_log_probs=action_log_probs,
                        episode_rewards=episode_rewards,
                        episode_values=episode_values,
                        episode_code_strings=episode_code_strings,
@@ -313,27 +315,6 @@ class SeniorDeveloper(object):
             tag='local_step/step',
             simple_value=self.local_step)])
 
-  def save_replay_buffer(self):
-    """Save replay buffer to disk.
-
-    Call this periodically so that training can recover if jobs go down.
-    """
-    if self.model.experience_replay is not None:
-      logger.info('Saving experience replay buffer to "%s".',
-                   self.model.experience_replay.save_file)
-      self.model.experience_replay.incremental_save(True)
-
-  def delete_replay_buffer(self):
-    """Delete replay buffer from disk.
-
-    Call this at the end of training to clean up. Replay buffer can get very
-    large.
-    """
-    if self.model.experience_replay is not None:
-      logger.info('Deleting experience replay buffer at "%s".',
-                   self.model.experience_replay.save_file)
-      tf.gfile.Remove(self.model.experience_replay.save_file)
-
   def save_topk_buffer(self):
     """Save top-k buffer to disk.
 
@@ -344,9 +325,6 @@ class SeniorDeveloper(object):
       # Overwrite previous data each time.
       with tf.gfile.FastGFile(self.topk_file, 'w') as f:
         f.write(pickle.dumps(self.model.top_episodes))
-
-  def clean_up(self):
-    self.delete_replay_buffer()
 
 def init_fn(unused_sess):
   logger.info('No checkpoint found. Initialized global params.')
@@ -376,7 +354,6 @@ class EmployedDeveloper(Developer):
   def __exit__(self, type, value, tb):
     self.session_manager.__exit__(type, value, tb)
     self.session = None
-    self.developer.clean_up()
 
 def hire(developer, log_dir, events_dir=None, is_chief=True):
   with developer.graph.as_default():
