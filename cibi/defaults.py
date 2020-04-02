@@ -27,7 +27,7 @@ def default_config():
               regularizer=0.0,
               softmax_tr=1.0,  # Reciprocal temperature.
               optimizer='rmsprop',  # 'adam', 'sgd', 'rmsprop'
-              topk=0,  # Top-k unique codes will be stored.
+              topk=5,  # Top-k unique codes will be stored.
               topk_loss_hparam=0.0,  # off policy loss multiplier.
               # Uniformly sample this many episodes from topk buffer per batch.
               # If topk is 0, this has no effect.
@@ -45,7 +45,7 @@ def default_config():
               eos_token=True,
               replay_temperature=1.0,
               # Replay probability. 1 = always replay, 0 = always on policy.
-              alpha=0.0,
+              alpha=0.5,
               # Whether to normalize importance weights in each minibatch.
               iw_normalize=True),
            config_lib.Config(

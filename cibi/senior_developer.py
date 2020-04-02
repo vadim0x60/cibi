@@ -15,15 +15,15 @@ logger = logging.getLogger(f'cibi.{__file__}')
 Reinforcement = namedtuple(
     'Reinforcement',
     ['episode_count', 'episode_lengths', 'episode_code_strings', 
-     'episode_actions', 'action_rewards', 'action_log_probs', 'episode_rewards', 'episode_values', 'episode_results'])
+     'episode_actions', 'action_rewards', 'action_log_probs', 
+     'episode_rewards', 'episode_values', 'episode_results'])
 
-def calculate_reinforcement(programs, episode_rewards): 
-  assert len(programs) == len(episode_rewards), f'{len(programs)} programs != {len(episode_rewards)} rewards'
+def calculate_reinforcement(feedback_branch): 
+  episode_rewards = np.array(feedback_branch['test_quality'])
 
-  episode_rewards = np.array(episode_rewards)
+  episode_code_strings = list(feedback_branch['code'])
   episode_lengths = np.array(
-    [len(program.code) 
-     for program in programs]
+    [len(code) for code in feedback_branch['code']]
   )
   # We only reward the last character
   # Everything else is a preparation for dat final punch
@@ -33,21 +33,18 @@ def calculate_reinforcement(programs, episode_rewards):
      pad_axes=0
   )
   action_rewards = np.array(action_rewards)
-  action_log_probs = utils.stack_pad([program.log_probs for program in programs], pad_axes=0)
+  action_log_probs = utils.stack_pad(feedback_branch['log_probs'], pad_axes=0)
   
   episode_values = np.array(
-    [program.value_estimate
-     for program in programs]
+    feedback_branch['value_estimate']
   )
-  episode_code_strings = [program.code
-                          for program in programs]
   episode_actions = utils.stack_pad(
-                    [bf_char_to_int(program.code)
-                     for program in programs], 
+                    [bf_char_to_int(code)
+                     for code in episode_code_strings], 
                      pad_axes=0)
   episode_actions = np.array(episode_actions, dtype=int)
-  episode_results = [program.result
-                     for program in programs]
+
+  episode_results = list(feedback_branch['result'])
 
   return Reinforcement(episode_count = len(episode_lengths),
                        episode_lengths=episode_lengths,
@@ -339,11 +336,11 @@ class EmployedDeveloper(Developer):
     self.session_manager = session_manager
     self.batch_size = developer.batch_size
 
-  def write_programs(self, program_pool, program_qualities):
+  def write_programs(self, inspiration_branch):
     return self.developer.write_programs(self.session)
 
-  def accept_feedback(self, programs, program_qualities):
-    reinforcement = calculate_reinforcement(programs, program_qualities)
+  def accept_feedback(self, feedback_branch):
+    reinforcement = calculate_reinforcement(feedback_branch)
     return self.developer.reflect(self.session, reinforcement)
 
   def __enter__(self):

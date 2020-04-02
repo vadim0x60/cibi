@@ -1,5 +1,6 @@
 from cibi import bf
 from cibi.developer import Developer
+from cibi.codebase import make_dev_codebase
 
 from deap.tools import crossover, mutation
 import re
@@ -16,11 +17,14 @@ def select(elements, weights, k=1):
     chosen = np.random.choice(len(elements), size=k, replace=False, p=weights)
     return [elements[c] for c in chosen]
 
-def prune(program_pool, program_qualities, strategy):
-    old_code = select(program_pool, program_qualities)[0].code
+def prune(inspiration_branch, strategy):
+    old_code, _, _ = inspiration_branch.sample(1, metric='test_quality').peek()
     logger.info(f'pruning {old_code}')
     new_code = re.sub(f'[{cell_actions}]+(?=[{bf.SHORTHAND_CELLS}])', '', old_code)
-    return [bf.Program(new_code)]
+
+    codebase = make_dev_codebase()
+    codebase.commit(new_code)
+    return codebase
 
 def mut_with_number_arrays(mutate_over_numbers):
     def mutate_over_chars(old_code, indpb):
@@ -39,12 +43,15 @@ mutation_modes = {
     'uniform': mut_with_number_arrays(lambda code, indpb: mutation.mutUniformInt(code, 1, len(bf.BF_INT_TO_CHAR), indpb)[0])
 }
 
-def mutate(program_pool, program_qualities, strategy):  
-    old_code = select(program_pool, program_qualities)[0].code
+def mutate(inspiration_branch, strategy):  
+    old_code, _, _ = inspiration_branch.sample(1, metric='test_quality').peek()
     mutation_name, mutation = select(list(mutation_modes.items()), weights=strategy['mutation_modes_distribution'])[0]
     logger.info(f'{mutation_name} mutation of {old_code}')
     new_code = ''.join(mutation(list(old_code), strategy['indpb']))
-    return [bf.Program(new_code)]
+    
+    codebase = make_dev_codebase()
+    codebase.commit(new_code)
+    return codebase
 
 def cx_with_number_arrays(crossover_over_numbers):
     def crossover_over_chars(c1, c2, indpb):
@@ -67,13 +74,17 @@ mating_modes = {
 # Doesn't matter here, since it happens to throwaway variables
 # but beware!
 
-def mate(program_pool, program_qualities, strategy):
-    program1, program2 = select(program_pool, program_qualities, k=2)
+def mate(inspiration_branch, strategy):
+    program1, program2 = inspiration_branch.sample(2, metric='test_quality')['code']
     code1, code2 = list(program1.code), list(program2.code)
     crossover_name, crossover = select(list(mating_modes.items()), weights=strategy['mating_modes_distribution'])[0]
     logger.info(f'{crossover_name} crossover between {code1} and {code2}')
     crossover(code1, code2, strategy['indpb'])
-    return [bf.Program(''.join(code1)), bf.Program(''.join(code2))]
+
+    codebase = make_dev_codebase()
+    codebase.commit(''.join(code1))
+    codebase.commit(''.join(code2))
+    return codebase
 
 available_actions = {
     'prune': prune,
@@ -111,11 +122,12 @@ class JuniorDeveloper(Developer):
         else:
             self.strategy = default_strategy
 
-    def write_programs(self, program_pool, program_qualities):
+    def write_programs(self, inspiration_branch):
         action_distribution = self.strategy['action_distribution']
-        action_name, act = select(list(available_actions.items()), weights=action_distribution)[0]
+        action_name, act = select(list(available_actions.items()), 
+                                  weights=action_distribution)[0]
         logger.info(f'Junior developer decided to {action_name}')
-        return act(program_pool, program_qualities, self.strategy)
+        return act(inspiration_branch, self.strategy)
 
-    def accept_feedback(self, programs, program_qualities):
+    def accept_feedback(self, feedback_branch):
         logger.info('If they were good at processing feedback, they wouldn\'t be a junior developer')

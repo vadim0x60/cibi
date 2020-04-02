@@ -41,6 +41,7 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, num_repetitions
                             cycle_programs=True,
                             sprint_length=100,
                             stretch_sprints=False,
+                            replay_temperature=config.agent.replay_temperature,
                             syntax_error_reward=-100)
 
         while agent.sprints_elapsed < config.sprints:
@@ -51,8 +52,8 @@ def run_gym_test(config, task_id, logdir, summary_tasks, master, num_repetitions
             #with open(os.path.join(rollouts_dir, f'{agent.sprints_elapsed}sprints_in.dill'), 'wb') as f:
             #    dill.dump(rollout, f)
 
-            with open(os.path.join(logdir, 'programs.txt'), 'w') as f:
-                f.writelines(p.code + '\n' for p in agent.archive_branch_programs)
+            #with open(os.path.join(logdir, 'programs.txt'), 'w') as f:
+            #    f.writelines(p.code + '\n' for p in agent.archive_branch_programs)
 
             with open(os.path.join(logdir, 'summary.txt'), 'w') as f:
                 summary = str({

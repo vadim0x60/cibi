@@ -1,6 +1,6 @@
 class Developer():
-    def program(self, program_pool, program_qualities):
+    def program(self, inspiration_branch):
         raise NotImplementedError()
 
-    def accept_feedback(self, programs, program_qualities):
+    def accept_feedback(self, feedback_branch):
         raise NotImplementedError()

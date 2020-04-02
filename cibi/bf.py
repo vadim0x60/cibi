@@ -199,10 +199,14 @@ class ActionSampler:
     
 class Executable(Agent):
   def __init__(self, code, observation_discretizer, action_sampler,
+               log_probs=None, value_estimate=None,
                init_memory=None, null_value=0,
                max_steps=2 ** 20, require_correct_syntax=True, debug=False,
                cycle = False):
     self.code = code
+    self.log_probs = log_probs
+    self.value_estimate = value_estimate
+
     code = list(code)
     self.bracemap, correct_syntax = buildbracemap(code)  # will modify code list
     if len(code) == 0:
@@ -365,20 +369,3 @@ class Executable(Agent):
   def act(self):
     action = self.action_sampler.sample(self.action_stack)
     return action
-
-class Program:
-    code = ""
-    log_probs = None
-    value_estimate = None
-    cycle = False
-
-    def compile(self, *args, **kwargs):
-        executable = Executable(self.code, *args, **kwargs)
-        executable.log_probs = self.log_probs
-        executable.value_estimate = self.value_estimate
-        return executable
-
-    def __init__(self, code, log_probs=None, value_estimate=None):
-      self.code = code
-      self.log_probs = log_probs
-      self.value_estimate = value_estimate

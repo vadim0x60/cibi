@@ -19,6 +19,7 @@ import tensorflow as tf
 import cibi.rollout as rollout_lib  # brain coder
 from cibi import utils
 from cibi import bf
+from cibi.codebase import Codebase
 from cibi.bf import BF_EOS_INT, BF_EOS_CHAR, BF_INT_TO_CHAR, BF_CHAR_TO_INT, bf_int_to_char, bf_char_to_int
 
 import logging
@@ -690,7 +691,7 @@ class LanguageModel:
 
     batch_actions, batch_values, episode_lengths, log_probs = session.run(
         [self.sampled_batch.tokens, self.sampled_batch.value,
-        self.sampled_batch.episode_lengths, self.sampled_batch.log_probs])
+         self.sampled_batch.episode_lengths, self.sampled_batch.log_probs])
     if episode_lengths.size == 0:
       # This should not happen.
       logger.warn(
@@ -703,7 +704,7 @@ class LanguageModel:
     if batch_values == 0:
       batch_values = np.zeros_like(episode_lengths)
 
-    programs = []
+    programs = Codebase(metrics=['value_estimate'], metadata=['log_probs'])
     for actions, value_estimate, episode_length, action_log_probs in zip(
         batch_actions, batch_values, episode_lengths, log_probs
       ):
@@ -712,9 +713,8 @@ class LanguageModel:
         code = code[:-1]
 
       logger.info(f'Wrote program: {code}')
-
-      program = bf.Program(code, log_probs=action_log_probs, value_estimate=value_estimate)
-      programs.append(program)
+      programs.commit(code, metrics={'value_estimate': value_estimate},
+                            metadata={'log_probs': action_log_probs})
 
     return programs
 

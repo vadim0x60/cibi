@@ -1,7 +1,9 @@
 from cibi.agent import Agent
 from cibi import bf
 from cibi import utils
+from cibi.codebase import make_dev_codebase, make_prod_codebase
 
+from math import exp, log
 import numpy as np
 import itertools
 
@@ -16,7 +18,7 @@ class ScrumMaster(Agent):
     """
 
     def __init__(self, developers, env, sprint_length, stretch_sprints=True,
-                 cycle_programs=True, syntax_error_reward=0):
+                 cycle_programs=True, syntax_error_reward=0, replay_temperature=0):
         self.developers = itertools.cycle(developers)
         self.lead_developer = next(self.developers)
         # TODO: config discretization steps
@@ -25,28 +27,39 @@ class ScrumMaster(Agent):
         self.cycle_programs = cycle_programs
 
         self.syntax_error_reward = syntax_error_reward
+        self.replay_temperature = replay_temperature
 
         self.sprint_length = sprint_length
         self.sprint_ttl = sprint_length
         self.stretch_sprints = stretch_sprints
         self.sprints_elapsed = 0
 
-        self.dev_branch_programs = []
-
-        self.feedback_branch_programs = []
-        self.feedback_branch_qualities = []
-
-        self.archive_branch_programs = []
-        self.archive_branch_qualities = []
+        self.dev_branch = make_dev_codebase()
+        self.feedback_branch = make_prod_codebase()
+        self.archive_branch = make_prod_codebase()
 
         self.prod_program = None
         self.prod_rewards = []
 
     def finalize_episode(self):
         if self.prod_rewards:
-            self.feedback_branch_qualities.append(sum(self.prod_rewards))
+            q = sum(self.prod_rewards)
+
+            metrics = {
+                'value_estimate': self.prod_program.value(),
+                'test_quality': q,
+                'replay_weight': exp(q / self.replay_temperature)
+            }
+
+            metadata = {
+                'log_probs': self.prod_program.log_probs,
+                'result': self.prod_program.result
+            }
+
+            self.feedback_branch.commit(self.prod_program.code, 
+                                        metrics=metrics, metadata=metadata)
+            
             self.prod_rewards = []
-            self.feedback_branch_programs.append(self.prod_program)
             self.prod_program = None
 
     def init(self):
@@ -83,17 +96,12 @@ class ScrumMaster(Agent):
 
     def retrospective(self):
         """Give the developer feedback on his code and archive said code"""
+        assert len(self.feedback_branch) == len(self.feedback_branch)
 
-        assert len(self.feedback_branch_programs) == len(self.feedback_branch_qualities)
-
-        if self.feedback_branch_programs:
-            self.lead_developer.accept_feedback(self.feedback_branch_programs, self.feedback_branch_qualities)
-
-            self.archive_branch_programs.extend(self.feedback_branch_programs)
-            self.archive_branch_qualities.extend(self.feedback_branch_qualities)
-
-            self.feedback_branch_programs = []
-            self.feedback_branch_qualities = []
+        if len(self.feedback_branch):
+            self.lead_developer.accept_feedback(self.feedback_branch)
+            self.archive_branch.merge(self.feedback_branch)
+            self.feedback_branch.clear()
 
     def done(self):
         self.retrospective()
@@ -113,24 +121,27 @@ class ScrumMaster(Agent):
         self.retrospective()
 
         # Get the developer to write code
-        programs = self.lead_developer.write_programs(self.archive_branch_programs, self.archive_branch_qualities)
-
-        # Compile it (might get syntax errors, our developer doesn't check for that)
-        programs = [program.compile(observation_discretizer=self.observation_discretizer, 
-                                    action_sampler=self.action_sampler,
-                                    cycle=self.cycle_programs) 
-                    for program in programs]
+        programs = self.lead_developer.write_programs(self.archive_branch)
 
         # Add it to the dev branch
-        self.dev_branch_programs.extend(programs)
+        self.dev_branch.merge(programs)
 
     def reprogram(self):
-        if not self.dev_branch_programs:
+        if not len(self.dev_branch):
             self.write_programs()
 
         self.finalize_episode()
-        self.prod_program = self.dev_branch_programs.pop()
 
+        # Check out a program from the dev branch
+        code, metrics, metadata = self.dev_branch.pop()
+
+        # Compile it (might get syntax errors, our developer doesn't check for that)
+        self.prod_program = bf.Executable(code,
+                                          log_probs=metadata['log_probs'],
+                                          value_estimate=metrics['value_estimate'],
+                                          observation_discretizer=self.observation_discretizer, 
+                                          action_sampler=self.action_sampler,
+                                          cycle=self.cycle_programs)
         self.sprint_ttl = self.sprint_length
         self.sprints_elapsed += 1
         
