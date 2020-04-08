@@ -1,5 +1,8 @@
 import pandas as pd
 
+import logging
+logger = logging.getLogger(f'cibi.{__file__}')
+
 def make_dataframe(columns, dtypes, index_column=None):
     # Stackoverflow-driven development (SDD) powered by 
     # https://stackoverflow.com/questions/36462257/create-empty-dataframe-in-pandas-specifying-column-types
@@ -80,21 +83,47 @@ class Codebase():
         else:
             self.flush_ttl -= 1
 
-    def merge(self, other_codebase):
-        metric_err = f'Failed to merge codebase with metris {other_codebase.metrics} into one with {self.metrics}'
-        metadata_err = f'Failed to merge codebase with metadata {other_codebase.metadata} into one with {self.metadata}'
+    def assert_same_structure(self, other_codebase):
+        metric_err = f'One codebase has metrics {other_codebase.metrics}, the other {self.metrics}'
+        metadata_err = f'One codebase has metrics {other_codebase.metadata}, the other {self.metadata}'
         
         assert self.metrics == other_codebase.metrics, metric_err
         assert self.metadata == other_codebase.metadata, metadata_err
-        
+
+    def merge(self, other_codebase):
+        self.assert_same_structure(other_codebase)
         self.data_frame = self.data_frame.append(other_codebase.data_frame)
+
+    def __add__(self, other_codebase):
+        self.assert_same_structure(other_codebase)
+        codebase = Codebase(metrics=self.metrics, metadata=self.metadata)
+        codebase.merge(self)
+        codebase.merge(other_codebase)
+        return codebase
+
+    def replace(self, other_codebase):
+        self.assert_same_structure(other_codebase)
+        for code, data in other_codebase.data_frame.iterrows():
+            self.data_frame[code] = data
+
+    def select(self, codes):
+        subcodebase = Codebase(metrics=self.metrics, metadata=self.metadata)
+        subcodebase.data_frame = self.data_frame.loc[codes]
+        return subcodebase
 
     def top_k(self, metric, k=3):
         assert metric in self.metrics
-        return self.data_frame.nlargest(k, metric)
+
+        sampled_codebase = Codebase(metrics=self.metrics,
+                                    metadata=self.metadata)
+        sampled_codebase.data_frame = self.data_frame.nlargest(k, metric)
+        return sampled_codebase
 
     def __getitem__(self, column):
-        return self.data_frame[column]
+        return list(self.data_frame[column])
+
+    def __setitem__(self, column, value):
+        self.data_frame[column] = value
 
     def __len__(self):
         return len(self.data_frame.index)
@@ -103,12 +132,20 @@ class Codebase():
         self.data_frame = self.data_frame.iloc[0:0]
 
     def sample(self, n=1, metric=None):
+        sampled_data_frame = None
+
         if metric:
-            assert metric in self.metrics
+            try:
+                sampled_data_frame = self.data_frame.sample(n=n, weights=self.data_frame[metric])
+            except ValueError as e:
+                logger.warn(e)
         
+        if sampled_data_frame is None:
+            sampled_data_frame = self.data_frame.sample(n=n, weights=None)
+
         sampled_codebase = Codebase(metrics=self.metrics,
                                     metadata=self.metadata)
-        sampled_codebase.data_frame = self.data_frame.sample(n=n, weights=metric)
+        sampled_codebase.data_frame = sampled_data_frame
         return sampled_codebase
 
     def peek(self):
@@ -129,12 +166,12 @@ class Codebase():
             self.data_frame.to_pickle(self.save_file)
 
 def make_dev_codebase():
-    return Codebase(metrics=['value_estimate'],
-                    metadata=['log_probs'])
+    return Codebase(metrics=['log_prob'],
+                    metadata=[])
 
 def make_prod_codebase():
-    return Codebase(metrics=['value_estimate', 'test_quality', 'replay_weight'],
-                    metadata=['log_probs', 'result'])
+    return Codebase(metrics=['test_quality', 'replay_weight', 'log_prob'],
+                    metadata=['result'])
 
 if __name__ == '__main__':
     codebase = Codebase()

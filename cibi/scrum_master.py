@@ -46,13 +46,12 @@ class ScrumMaster(Agent):
             q = sum(self.prod_rewards)
 
             metrics = {
-                'value_estimate': self.prod_program.value(),
                 'test_quality': q,
-                'replay_weight': exp(q / self.replay_temperature)
+                'replay_weight': exp(q / self.replay_temperature),
+                'log_prob': self.prod_program.log_prob
             }
 
             metadata = {
-                'log_probs': self.prod_program.log_probs,
                 'result': self.prod_program.result
             }
 
@@ -91,21 +90,14 @@ class ScrumMaster(Agent):
             else:
                 raise
 
-    def value(self):
-        return self.prod_program.value()
-
     def retrospective(self):
-        """Give the developer feedback on his code and archive said code"""
-        assert len(self.feedback_branch) == len(self.feedback_branch)
-
+        """Give the developers feedback on his code and archive said code"""
         if len(self.feedback_branch):
             self.lead_developer.accept_feedback(self.feedback_branch)
             self.archive_branch.merge(self.feedback_branch)
             self.feedback_branch.clear()
 
     def done(self):
-        self.retrospective()
-
         if self.sprint_ttl <= 0:
             self.reprogram()
 
@@ -127,18 +119,17 @@ class ScrumMaster(Agent):
         self.dev_branch.merge(programs)
 
     def reprogram(self):
+        self.finalize_episode()
+
         if not len(self.dev_branch):
             self.write_programs()
-
-        self.finalize_episode()
 
         # Check out a program from the dev branch
         code, metrics, metadata = self.dev_branch.pop()
 
         # Compile it (might get syntax errors, our developer doesn't check for that)
         self.prod_program = bf.Executable(code,
-                                          log_probs=metadata['log_probs'],
-                                          value_estimate=metrics['value_estimate'],
+                                          log_prob=metrics['log_prob'],
                                           observation_discretizer=self.observation_discretizer, 
                                           action_sampler=self.action_sampler,
                                           cycle=self.cycle_programs)

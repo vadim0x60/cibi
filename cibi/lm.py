@@ -19,7 +19,7 @@ import tensorflow as tf
 import cibi.rollout as rollout_lib  # brain coder
 from cibi import utils
 from cibi import bf
-from cibi.codebase import Codebase
+from cibi.codebase import make_dev_codebase
 from cibi.bf import BF_EOS_INT, BF_EOS_CHAR, BF_INT_TO_CHAR, BF_CHAR_TO_INT, bf_int_to_char, bf_char_to_int
 
 import logging
@@ -53,7 +53,6 @@ def make_optimizer(kind, lr):
     return tf.train.RMSPropOptimizer(learning_rate=lr, decay=0.99)
   else:
     raise ValueError('Optimizer type "%s" not recognized.' % kind)
-
 
 class LinearWrapper(tf.contrib.rnn.RNNCell):
   """RNNCell wrapper that adds a linear layer to the output."""
@@ -114,7 +113,6 @@ class LanguageModel:
 
   def __init__(self, global_config,
                logging_file=None,
-               experience_replay_file=None,
                global_best_reward_fn=None,
                program_count=None,
                do_iw_summaries=False,
@@ -123,14 +121,12 @@ class LanguageModel:
                is_local=True):
     self.config = config = global_config.agent
     self.logging_file = logging_file
-    self.experience_replay_file = experience_replay_file
     self.verbose_level = verbose_level
     self.global_best_reward_fn = global_best_reward_fn
     self.parent_scope_name = tf.get_variable_scope().name
     self.dtype = dtype
     self.allow_eos_token = config.eos_token
     self.pi_loss_hparam = config.pi_loss_hparam
-    self.vf_loss_hparam = config.vf_loss_hparam
     self.is_local = is_local
 
     self.batch_size = global_config.batch_size
@@ -149,34 +145,27 @@ class LanguageModel:
         dtype=dtype)  # TF's default initializer.
     tf.get_variable_scope().set_initializer(self.initializer)
 
-    self.a2c = config.ema_baseline_decay == 0
-    if not self.a2c:
-      logger.info('Using exponential moving average REINFORCE baselines.')
-      self.ema_baseline_decay = config.ema_baseline_decay
-      self.ema_by_len = [0.0] * global_config.timestep_limit
-    else:
-      logger.info('Using advantage (a2c) with learned value function.')
-      self.ema_baseline_decay = 0.0
-      self.ema_by_len = None
+    logger.info('Using exponential moving average REINFORCE baselines.')
+    self.ema_baseline_decay = config.ema_baseline_decay
+    self.ema_by_len = [0.0] * global_config.timestep_limit
 
     # Top-k
     if config.topk and config.topk_loss_hparam:
+      self.topk = config.topk
       self.topk_loss_hparam = config.topk_loss_hparam
       self.topk_batch_size = config.topk_batch_size
       if self.topk_batch_size <= 0:
         raise ValueError('topk_batch_size must be a positive integer. Got %s',
                          self.topk_batch_size)
-      self.top_episodes = utils.MaxUniquePriorityQueue(config.topk)
-      logger.info('Made max-priorty-queue with capacity %d',
-                   self.top_episodes.capacity)
     else:
-      self.top_episodes = None
+      self.topk = 0
       self.topk_loss_hparam = 0.0
-      logger.info('No max-priorty-queue')
 
     # Experience replay.
-    self.replay_temperature = config.replay_temperature
-    self.num_replay_per_batch = int(global_config.batch_size * config.alpha)
+    if config.replay_temperature == 0:
+      self.num_replay_per_batch = 0
+    else:
+      self.num_replay_per_batch = int(global_config.batch_size * config.alpha)
     self.num_on_policy_per_batch = (
         global_config.batch_size - self.num_replay_per_batch)
     self.replay_alpha = (
@@ -184,18 +173,6 @@ class LanguageModel:
     logger.info('num_replay_per_batch: %d', self.num_replay_per_batch)
     logger.info('num_on_policy_per_batch: %d', self.num_on_policy_per_batch)
     logger.info('replay_alpha: %s', self.replay_alpha)
-    if self.num_replay_per_batch > 0:
-      # Train with off-policy episodes from replay buffer.
-      start_time = time.time()
-      self.experience_replay = utils.RouletteWheel(
-          unique_mode=True, save_file=experience_replay_file)
-      logger.info('Took %s sec to load replay buffer from disk.',
-                   int(time.time() - start_time))
-      logger.info('Replay buffer file location: "%s"',
-                   self.experience_replay.save_file)
-    else:
-      # Only train on-policy.
-      self.experience_replay = None
 
     if program_count is not None:
       self.program_count = program_count
@@ -205,7 +182,7 @@ class LanguageModel:
           self.program_count_add_ph)
 
     ################################
-    # RL policy and value networks #
+    # RL policy network #
     ################################
     batch_size = global_config.batch_size
     logger.info('batch_size: %d', batch_size)
@@ -217,12 +194,6 @@ class LanguageModel:
         self.action_space,
         dtype=dtype,
         suppress_index=None if self.allow_eos_token else BF_EOS_INT)
-    self.value_cell = LinearWrapper(
-        tf.contrib.rnn.MultiRNNCell(
-            [tf.contrib.rnn.BasicLSTMCell(cell_size)
-             for cell_size in config.value_lstm_sizes]),
-        1,
-        dtype=dtype)
 
     obs_embedding_scope = 'obs_embed'
     with tf.variable_scope(
@@ -317,27 +288,10 @@ class LanguageModel:
                                  name='policy_logits')
     sampled_tokens = tf.transpose(sampled_output_ta.stack(), (1, 0),
                                   name='sampled_tokens')
-    # Add SOS to beginning of the sequence.
-    rshift_sampled_tokens = rshift_time(sampled_tokens, fill=BF_EOS_INT)
-
-    # Initial state is 0, 2nd state is first token.
-    # Note: If value of last state is computed, this will be used as bootstrap.
-    if self.a2c:
-      with tf.variable_scope('value'):
-        value_output, _ = tf.nn.dynamic_rnn(
-            self.value_cell,
-            tf.gather(obs_embeddings, rshift_sampled_tokens),
-            sequence_length=output_lengths,
-            dtype=dtype)
-      value = tf.squeeze(value_output, axis=[2])
-    else:
-      value = tf.zeros([], dtype=dtype)
-
     # for sampling actions from the agent, and which told tensors for doing
     # gradient updates on the agent.
     self.sampled_batch = AttrDict(
         logits=policy_logits,
-        value=value,
         tokens=sampled_tokens,
         episode_lengths=output_lengths,
         probs=tf.nn.softmax(policy_logits),
@@ -375,20 +329,8 @@ class LanguageModel:
           sequence_length=self.adjusted_lengths,
           dtype=dtype)
 
-    if self.a2c:
-      with tf.variable_scope('value', reuse=True):
-        value_output, _ = tf.nn.dynamic_rnn(
-            self.value_cell,
-            tf.gather(obs_embeddings, inputs),
-            sequence_length=self.adjusted_lengths,
-            dtype=dtype)
-      value2 = tf.squeeze(value_output, axis=[2])
-    else:
-      value2 = tf.zeros([], dtype=dtype)
-
     self.given_batch = AttrDict(
         logits=logits,
-        value=value2,
         tokens=sampled_tokens,
         episode_lengths=self.adjusted_lengths,
         probs=tf.nn.softmax(logits),
@@ -407,12 +349,8 @@ class LanguageModel:
     self.a_probs = a_probs = self.given_batch.probs * episode_masks_3d
     self.a_log_probs = a_log_probs = (
         self.given_batch.log_probs * episode_masks_3d)
-    self.a_value = a_value = self.given_batch.value * episode_masks
     self.a_policy_multipliers = a_policy_multipliers = (
         self.policy_multipliers * episode_masks)
-    if self.a2c:
-      self.a_empirical_values = a_empirical_values = (
-          self.empirical_values * episode_masks)
 
     # pi_loss is scalar
     acs_onehot = tf.one_hot(self.actions, self.action_space, dtype=dtype)
@@ -429,16 +367,6 @@ class LanguageModel:
     self.chosen_log_probs = tf.reduce_sum(chosen_masked_log_probs, axis=2)
     self.chosen_probs = tf.reduce_sum(acs_onehot * a_probs, axis=2)
 
-    # loss of value function
-    if self.a2c:
-      vf_loss_per_step = tf.square(a_value - a_empirical_values)
-      self.vf_loss = vf_loss = (
-          tf.reduce_mean(tf.reduce_sum(vf_loss_per_step, axis=1), axis=0)
-          * MAGIC_LOSS_MULTIPLIER)  # Minimize.
-      assert len(self.vf_loss.shape) == 0  # pylint: disable=g-explicit-length-test
-    else:
-      self.vf_loss = vf_loss = 0.0
-
     # Maximize entropy regularizer
     self.entropy = entropy = (
         -tf.reduce_mean(
@@ -449,7 +377,7 @@ class LanguageModel:
 
     # off-policy loss
     self.offp_switch = tf.placeholder(dtype, [], name='offp_switch')
-    if self.top_episodes is not None:
+    if self.topk != 0:
       # Add SOS to beginning of the sequence.
       offp_inputs = tf.gather(obs_embeddings,
                               rshift_time(self.off_policy_targets,
@@ -476,12 +404,10 @@ class LanguageModel:
         config.entropy_beta, dtype=dtype, name='entropy_beta')
 
     self.pi_loss_term = pi_loss * self.pi_loss_hparam
-    self.vf_loss_term = vf_loss * self.vf_loss_hparam
     self.entropy_loss_term = self.negentropy * self.entropy_hparam
     self.topk_loss_term = self.topk_loss_hparam * topk_loss
     self.loss = (
         self.pi_loss_term
-        + self.vf_loss_term
         + self.entropy_loss_term
         + self.topk_loss_term)
 
@@ -538,38 +464,37 @@ class LanguageModel:
               'is/log_norm_replay_weights', self.log_norm_replay_weights_ph),
       ])
 
-  def _compute_iw(self, policy_log_probs, replay_weights):
-    """Compute importance weights for a batch of episodes.
-
-    Arguments are iterables of length batch_size.
+  def _iw_summary(self, session, replay_iw, replay_log_probs,
+                  norm_replay_weights, on_policy_iw,
+                  on_policy_log_probs):
+    """Compute summaries for importance weights at a given batch.
 
     Args:
-      policy_log_probs: Log probability of each episode under the current
+      session: tf.Session instance.
+      replay_iw: Importance weights for episodes from replay buffer.
+      replay_log_probs: Total log probabilities of the replay episodes under the
+          current policy.
+      norm_replay_weights: Normalized replay weights, i.e. values in `replay_iw`
+          divided by the total weight in the entire replay buffer. Note, this is
+          also the probability of selecting each episode from the replay buffer
+          (in a roulette wheel replay buffer).
+      on_policy_iw: Importance weights for episodes sampled from the current
           policy.
-      replay_weights: Weight of each episode in the replay buffer. 0 for
-          episodes not sampled from the replay buffer (i.e. sampled from the
-          policy).
+      on_policy_log_probs: Total log probabilities of the on-policy episodes
+          under the current policy.
 
     Returns:
-      Numpy array of shape [batch_size] containing the importance weight for
-      each episode in the batch.
+      Serialized TF summaries. Use a summary writer to write these summaries to
+      disk.
     """
-    log_total_replay_weight = log(self.experience_replay.total_weight)
+    return session.run(
+        self.iw_summary_op,
+        {self.log_iw_replay_ph: np.log(replay_iw),
+         self.log_iw_policy_ph: np.log(on_policy_iw),
+         self.log_norm_replay_weights_ph: np.log(norm_replay_weights),
+         self.log_prob_replay_ph: replay_log_probs,
+         self.log_prob_policy_ph: on_policy_log_probs})
 
-    # importance weight
-    # = 1 / [(1 - a) + a * exp(log(replay_weight / total_weight / p))]
-    # = 1 / ((1-a) + a*q/p)
-    a = float(self.replay_alpha)
-    a_com = 1.0 - a  # compliment of a
-    importance_weights = np.asarray(
-        [1.0 / (a_com
-                + a * exp((log(replay_weight) - log_total_replay_weight)
-                          - log_p))
-         if replay_weight > 0 else 1.0 / a_com
-         for log_p, replay_weight
-         in zip(policy_log_probs, replay_weights)])
-    return importance_weights
-  
   def make_summary_ops(self):
     """Construct summary ops for the model."""
     # size = number of timesteps across entire batch. Number normalized by size
@@ -588,7 +513,6 @@ class LanguageModel:
     # RL summaries.
     self.rl_summary_op = tf.summary.merge(
         [tf.summary.scalar('model/policy_loss', self.pi_loss / size),
-         tf.summary.scalar('model/value_loss', self.vf_loss / size),
          tf.summary.scalar('model/topk_loss', self.topk_loss / offp_size),
          tf.summary.scalar('model/entropy', self.entropy / size),
          tf.summary.scalar('model/loss', self.loss / size),
@@ -604,7 +528,6 @@ class LanguageModel:
                            tf.global_norm(self.trainable_variables)),
          tf.summary.scalar('loss/loss', self.loss),
          tf.summary.scalar('loss/entropy', self.entropy_loss_term),
-         tf.summary.scalar('loss/vf', self.vf_loss_term),
          tf.summary.scalar('loss/policy', self.pi_loss_term),
          tf.summary.scalar('loss/offp', self.topk_loss_term)] +
         [tf.summary.scalar(
@@ -681,7 +604,7 @@ class LanguageModel:
             simple_value=np.min(tr))])
     return reward_summary
 
-  def write_programs(self, session):
+  def write_programs(self, session, inspiration_branch):
     """Generate Brainfuck programs with this language model"""
 
     # Sample new programs from the policy.
@@ -689,36 +612,37 @@ class LanguageModel:
     # programs will be executed and added to the replay buffer. Those which
     # are not executed will be discarded and not counted.
 
-    batch_actions, batch_values, episode_lengths, log_probs = session.run(
-        [self.sampled_batch.tokens, self.sampled_batch.value,
-         self.sampled_batch.episode_lengths, self.sampled_batch.log_probs])
+    self.inspiration_branch = inspiration_branch
+
+    batch_actions, episode_lengths, log_probs = session.run(
+        [self.sampled_batch.tokens,
+         self.sampled_batch.episode_lengths, 
+         self.sampled_batch.log_probs])
+
     if episode_lengths.size == 0:
       # This should not happen.
       logger.warn(
           'Shapes:\n'
           'batch_actions.shape: %s\n'
-          'batch_values.shape: %s\n'
           'episode_lengths.shape: %s\n',
-          batch_actions.shape, batch_values.shape, episode_lengths.shape)
+          batch_actions.shape, episode_lengths.shape)
 
-    if batch_values == 0:
-      batch_values = np.zeros_like(episode_lengths)
-
-    programs = Codebase(metrics=['value_estimate'], metadata=['log_probs'])
-    for actions, value_estimate, episode_length, action_log_probs in zip(
-        batch_actions, batch_values, episode_lengths, log_probs
+    programs = make_dev_codebase()
+    for actions, episode_length, action_log_probs in zip(
+        batch_actions, episode_lengths, log_probs
       ):
       code = bf_int_to_char(actions[:episode_length])
       if code[-1] == BF_EOS_CHAR:
         code = code[:-1]
 
       logger.info(f'Wrote program: {code}')
-      programs.commit(code, metrics={'value_estimate': value_estimate},
-                            metadata={'log_probs': action_log_probs})
+      metrics = {'log_prob': np.choose(actions[:episode_length], 
+                                       action_log_probs[:episode_length].T).sum()}
+      programs.commit(code, metrics=metrics)
 
     return programs
 
-  def reflect(self, session, reinforcement, train_op, global_step_op, return_gradients=False):
+  def accept_feedback(self, session, feedback_branch, train_op, global_step_op, return_gradients=False):
     """Improve language generation based on rewards from the real world
 
     Args:
@@ -738,34 +662,32 @@ class LanguageModel:
       global step, global NPE, serialized summaries, and optionally gradients.
     """
     assert self.is_local
+    assert len(feedback_branch) == self.batch_size
+
+    if self.topk != 0:
+      off_policy_branch = self.inspiration_branch.top_k(self.topk).sample(self.topk_batch_size)
+      
+      off_policy_target_lengths, off_policy_targets, _, _ = \
+        process_episodes(off_policy_branch, self.ema_by_len)
+      
+      offp_switch = 1
+    else:
+      off_policy_targets = [[0]]
+      off_policy_target_lengths = [1]
+      offp_switch = 0
+
+    feedback_lengths, feedback_actions, feedback_targets, feedback_returns = \
+      process_episodes(feedback_branch, self.ema_by_len)
 
     # Do update for REINFORCE or REINFORCE + replay buffer.
-    if self.experience_replay is None:
+    if self.num_replay_per_batch == 0:
       # Train with on-policy REINFORCE.
-      num_programs_from_policy = reinforcement.episode_count
+      num_programs_from_policy = len(feedback_branch)
       
       # Process on-policy samples.
-      batch_targets, batch_returns = process_episodes(
-          reinforcement.action_rewards, reinforcement.episode_lengths, a2c=self.a2c,
-          baselines=self.ema_by_len,
-          batch_values=reinforcement.episode_values)
-      batch_policy_multipliers = batch_targets
-      batch_emp_values = batch_returns if self.a2c else [[]]
-      adjusted_lengths = reinforcement.episode_lengths
-
-      if self.top_episodes:
-        assert len(self.top_episodes) > 0  # pylint: disable=g-explicit-length-test
-        off_policy_targets = [
-            item for item, _
-            in self.top_episodes.random_sample(self.topk_batch_size)]
-        off_policy_target_lengths = [len(t) for t in off_policy_targets]
-        off_policy_targets = utils.stack_pad(off_policy_targets, pad_axes=0,
-                                            dtype=np.int32)
-        offp_switch = 1
-      else:
-        off_policy_targets = [[0]]
-        off_policy_target_lengths = [1]
-        offp_switch = 0
+     
+      batch_policy_multipliers = feedback_targets
+      batch_emp_values = [[]]
 
       fetches = {
           'global_step': global_step_op,
@@ -776,115 +698,77 @@ class LanguageModel:
 
       fetched = session.run(
           fetches,
-          {self.actions: reinforcement.episode_actions,
+          {self.actions: feedback_actions,
           self.empirical_values: batch_emp_values,
           self.policy_multipliers: batch_policy_multipliers,
-          self.adjusted_lengths: adjusted_lengths,
+          self.adjusted_lengths: feedback_lengths,
           self.off_policy_targets: off_policy_targets,
           self.off_policy_target_lengths: off_policy_target_lengths,
           self.offp_switch: offp_switch})
 
-      combined_adjusted_lengths = adjusted_lengths
-      combined_returns = batch_returns
+      combined_adjusted_lengths = feedback_lengths
+      combined_returns = feedback_returns
     else:
       # Train with REINFORCE + off-policy replay buffer by using importance
       # sampling.
 
       # Sample from experince replay buffer
-      empty_replay_buffer = (
-          self.experience_replay.is_empty()
-          if self.experience_replay is not None else True)
+      empty_replay_buffer = len(self.inspiration_branch) == 0
       num_programs_from_replay_buff = (
           self.num_replay_per_batch if not empty_replay_buffer else 0)
       num_programs_from_policy = (
           self.batch_size - num_programs_from_replay_buff)
       if (not empty_replay_buffer) and num_programs_from_replay_buff:
-        result = self.experience_replay.sample_many(
-            num_programs_from_replay_buff)
-        experience_samples, replay_weights = zip(*result)
-        (replay_actions,
-        replay_rewards,
-        _,  # log probs
-        replay_adjusted_lengths) = zip(*experience_samples)
+        replay_branch = self.inspiration_branch.sample(num_programs_from_replay_buff)
+        replay_lengths, replay_actions, replay_batch_targets, replay_returns = \
+          process_episodes(replay_branch, self.ema_by_len)
 
         replay_episode_actions = utils.stack_pad(replay_actions, pad_axes=0,
-                                              dtype=np.int32)
+                                                 dtype=np.int32)
 
         # compute log probs for replay samples under current policy
         all_replay_log_probs, = session.run(
             [self.given_batch.log_probs],
             {self.actions: replay_episode_actions,
-            self.adjusted_lengths: replay_adjusted_lengths})
+             self.adjusted_lengths: replay_lengths})
+
         replay_log_probs = [
-            np.choose(replay_actions[i], all_replay_log_probs[i, :l].T).sum()
-            for i, l in enumerate(replay_adjusted_lengths)]
-      else:
-        # Replay buffer is empty. Do not sample from it.
-        replay_actions = None
-        replay_policy_multipliers = None
-        replay_adjusted_lengths = None
-        replay_log_probs = None
-        replay_weights = None
-        replay_returns = None
-        on_policy_weights = [0] * num_programs_from_replay_buff
+            np.choose(replay_actions[i, :l], all_replay_log_probs[i, :l].T).sum()
+            for i, l in enumerate(replay_lengths)]
+        replay_branch['log_prob'] = replay_log_probs
 
-      assert not self.a2c  # TODO(danabo): Support A2C with importance sampling.
-
-      # Process on-policy samples.
-      p = num_programs_from_policy
-      
-      batch_targets, batch_returns = process_episodes(
-          reinforcement.action_rewards[:p], reinforcement.episode_lengths[:p], a2c=False,
-          baselines=self.ema_by_len)
-      batch_policy_multipliers = batch_targets
-      batch_emp_values = [[]]
-      on_policy_returns = batch_returns
-
-      # Process off-policy samples.
-      if (not empty_replay_buffer) and num_programs_from_replay_buff:
-        offp_episode_rewards = [
-            [0.0] * (l - 1) + [r]
-            for l, r in zip(replay_adjusted_lengths, replay_rewards)]
-        assert len(offp_episode_rewards) == num_programs_from_replay_buff
-        assert len(replay_adjusted_lengths) == num_programs_from_replay_buff
-        replay_batch_targets, replay_returns = process_episodes(
-            offp_episode_rewards, replay_adjusted_lengths, a2c=False,
-            baselines=self.ema_by_len)
         # Convert 2D array back into ragged 2D list.
         replay_policy_multipliers = [
             replay_batch_targets[i, :l]
             for i, l
             in enumerate(
-                replay_adjusted_lengths[:num_programs_from_replay_buff])]
-
-      adjusted_lengths = reinforcement.episode_lengths[:num_programs_from_policy]
-
-      if self.top_episodes:
-        assert len(self.top_episodes) > 0  # pylint: disable=g-explicit-length-test
-        off_policy_targets = [
-            item for item, _
-            in self.top_episodes.random_sample(self.topk_batch_size)]
-        off_policy_target_lengths = [len(t) for t in off_policy_targets]
-        off_policy_targets = utils.stack_pad(off_policy_targets, pad_axes=0,
-                                            dtype=np.int32)
-        offp_switch = 1
+                replay_lengths[:num_programs_from_replay_buff])]
       else:
-        off_policy_targets = [[0]]
-        off_policy_target_lengths = [1]
-        offp_switch = 0
+        replay_lengths = None
+        replay_actions = None
+        replay_batch_targets = None
+        replay_returns = None
+        replay_policy_multipliers = None
 
+      # Process on-policy samples.
+      p = num_programs_from_policy
+      
+      on_policy_branch = feedback_branch.sample(p)
+      adjusted_lengths, episode_actions, batch_targets, batch_returns = \
+        process_episodes(on_policy_branch, self.ema_by_len)
+      batch_policy_multipliers = batch_targets
+      batch_emp_values = [[]]
+      on_policy_returns = batch_returns
+        
       # On-policy episodes.
       if num_programs_from_policy:
         separate_actions = [
-            reinforcement.episode_actions[i, :l]
-            for i, l in enumerate(adjusted_lengths)]
-        chosen_log_probs = [
-            np.choose(separate_actions[i], reinforcement.action_log_probs[i, :l].T)
+            episode_actions[i, :l]
             for i, l in enumerate(adjusted_lengths)]
         new_experiences = [
             (separate_actions[i],
-            reinforcement.episode_rewards[i],
-            chosen_log_probs[i].sum(), l)
+            on_policy_branch['test_quality'][i],
+            on_policy_branch['log_prob'][i], l)
             for i, l in enumerate(adjusted_lengths)]
         on_policy_policy_multipliers = [
             batch_policy_multipliers[i, :l]
@@ -901,24 +785,17 @@ class LanguageModel:
         on_policy_adjusted_lengths = []
 
       if (not empty_replay_buffer) and num_programs_from_replay_buff:
+        on_policy_branch['replay_weight'] = 0
         # Look for new experiences in replay buffer. Assign weight if an episode
         # is in the buffer.
-        on_policy_weights = [0] * num_programs_from_policy
-        for i, cs in enumerate(reinforcement.episode_code_strings[:num_programs_from_policy]):
-          if self.experience_replay.has_key(cs):
-            on_policy_weights[i] = self.experience_replay.get_weight(cs)
+        on_policy_branch.replace(replay_branch)
 
       # Randomly select on-policy or off policy episodes to train on.
-      combined_adjusted_lengths = list_(replay_adjusted_lengths) + list_(on_policy_adjusted_lengths)
+      combined_adjusted_lengths = list_(replay_lengths) + list_(on_policy_adjusted_lengths)
       combined_returns = utils.stack_pad(list_(replay_returns) + list_(on_policy_returns), pad_axes=0)
       combined_actions = utils.stack_pad(list_(replay_actions) + list_(on_policy_actions), pad_axes=0)
       combined_policy_multipliers = utils.stack_pad(list_(replay_policy_multipliers) + list_(on_policy_policy_multipliers),
                                                     pad_axes=0)
-      # P
-      combined_on_policy_log_probs = list_(replay_log_probs) + list_(on_policy_log_probs)
-      # Q
-      # Assume weight is zero for all sequences sampled from the policy.
-      combined_q_weights = list_(replay_weights) + list_(on_policy_weights)
 
       # Importance adjustment. Naive formulation:
       # E_{x~p}[f(x)] ~= 1/N sum_{x~p}(f(x)) ~= 1/N sum_{x~q}(f(x) * p(x)/q(x)).
@@ -945,8 +822,7 @@ class LanguageModel:
         # importance weight
         # = 1 / [(1 - a) + a * exp(log(replay_weight / total_weight / p))]
         # = 1 / ((1-a) + a*q/p)
-        importance_weights = self._compute_iw(combined_on_policy_log_probs,
-                                              combined_q_weights)
+        importance_weights = compute_iw(on_policy_branch + replay_branch, self.replay_alpha)
         if self.config.iw_normalize:
           importance_weights *= (
               float(self.batch_size) / importance_weights.sum())
@@ -970,27 +846,20 @@ class LanguageModel:
           self.off_policy_target_lengths: off_policy_target_lengths,
           self.offp_switch: offp_switch})
 
-      # Add to experience replay buffer.
-      self.experience_replay.add_many(
-          objs=new_experiences,
-          weights=[exp(r / self.replay_temperature) for r in reinforcement.episode_rewards[:num_programs_from_policy]],
-          keys=reinforcement.episode_code_strings[:num_programs_from_policy])
-
     # Update program count.
     session.run(
         [self.program_count_add_op],
         {self.program_count_add_ph: num_programs_from_policy})
 
     # Update EMA baselines on the mini-batch which we just did traning on.
-    if not self.a2c:
-      for i in xrange(reinforcement.episode_count):
-        episode_length = combined_adjusted_lengths[i]
-        empirical_returns = combined_returns[i, :episode_length]
-        for j in xrange(episode_length):
-          # Update ema_baselines in place.
-          self.ema_by_len[j] = (
-              self.ema_baseline_decay * self.ema_by_len[j]
-              + (1 - self.ema_baseline_decay) * empirical_returns[j])
+    for i, program in enumerate(feedback_branch['code']):
+      episode_length = combined_adjusted_lengths[i]
+      empirical_returns = combined_returns[i, :episode_length]
+      for j in xrange(episode_length):
+        # Update ema_baselines in place.
+        self.ema_by_len[j] = (
+            self.ema_baseline_decay * self.ema_by_len[j]
+            + (1 - self.ema_baseline_decay) * empirical_returns[j])
 
     global_step = fetched['global_step']
     global_npe = fetched['program_count']
@@ -1003,37 +872,29 @@ class LanguageModel:
           session,
           global_step,
           global_npe,
-          reinforcement.episode_rewards[s_i],
-          reinforcement.episode_lengths[s_i], 
-          reinforcement.episode_code_strings[s_i], 
-          reinforcement.episode_results[s_i])
-      reward_summary = self._rl_reward_summary(reinforcement.episode_rewards)
+          feedback_branch['test_quality'][s_i],
+          feedback_lengths[s_i], 
+          feedback_branch['code'][s_i], 
+          feedback_branch['result'][s_i])
+      reward_summary = self._rl_reward_summary(feedback_branch['test_quality'])
 
-      is_best = False
-      if self.global_best_reward_fn:
-        # Save best reward.
-        best_reward = np.max(reinforcement.episode_rewards)
-        is_best = self.global_best_reward_fn(session, best_reward)
-
-      max_i = np.argmax(reinforcement.episode_rewards)
-      max_tot_r = reinforcement.episode_rewards[max_i]
+      max_i = np.argmax(feedback_branch['test_quality'])
+      max_tot_r = feedback_branch['test_quality'][max_i]
       if max_tot_r >= self.top_reward:
         if max_tot_r >= self.top_reward:
           self.top_reward = max_tot_r
-        logger.info('Top code: r=%.2f, \t%s', max_tot_r, reinforcement.episode_code_strings[max_i])
-      if self.top_episodes is not None:
-        self.top_episodes.push(
-            max_tot_r, tuple(reinforcement.episode_actions[max_i, :reinforcement.episode_lengths[max_i]]))
+        logger.info('Top code: r=%.2f, \t%s', max_tot_r, feedback_branch['code'][max_i])
 
       summaries_list += [text_summary, reward_summary]
 
       if self.do_iw_summaries and not empty_replay_buffer:
         # prob of replay samples under replay buffer sampling.
+        total_weight = sum(replay_branch['replay_weight'])
         norm_replay_weights = [
-            w / self.experience_replay.total_weight
-            for w in replay_weights]
-        replay_iw = self._compute_iw(replay_log_probs, replay_weights)
-        on_policy_iw = self._compute_iw(on_policy_log_probs, on_policy_weights)
+            w / total_weight
+            for w in replay_branch['replay_weight']]
+        replay_iw = compute_iw(replay_branch, self.replay_alpha)
+        on_policy_iw = compute_iw(on_policy_branch, self.replay_alpha)
         summaries_list.append(
             self._iw_summary(
                 session, replay_iw, replay_log_probs, norm_replay_weights,
@@ -1045,79 +906,104 @@ class LanguageModel:
         summaries_list=summaries_list,
         gradients_dict=fetched['gradients'])
 
-def process_episodes(
-    batch_rewards, episode_lengths, a2c=False, baselines=None,
-    batch_values=None):
+def compute_iw(codebase, replay_alpha):
+    """Compute importance weights for a batch of episodes.
+
+    The codebase has to contain a 'replay_weight' and 'log_prob' metrics
+
+    Returns:
+      Numpy array of shape [batch_size] containing the importance weight for
+      each episode in the batch.
+    """
+    log_total_replay_weight = log(sum(codebase['replay_weight']))
+
+    # importance weight
+    # = 1 / [(1 - a) + a * exp(log(replay_weight / total_weight / p))]
+    # = 1 / ((1-a) + a*q/p)
+    a = float(replay_alpha)
+    a_com = 1.0 - a  # compliment of a
+
+    importance_weights = np.asarray(
+        [1.0 / (a_com
+                + a * exp((log(replay_weight) - log_total_replay_weight)
+                          - log_p))
+         if replay_weight > 0 else 1.0 / a_com
+         for log_p, replay_weight
+         in zip(codebase['log_prob'], codebase['replay_weight'])])
+    return importance_weights
+
+def process_episodes(reinforce_branch, baselines=None):
   """Compute REINFORCE targets.
+
+  Treat a program as a reinforcement learning episode where a character
+  is an action and 'test_quality' is the reward for the last character
 
   REINFORCE here takes the form:
   grad_t = grad[log(pi(a_t|c_t))*target_t]
   where c_t is context: i.e. RNN state or environment state (or both).
 
-  Two types of targets are supported:
-  1) Advantage actor critic (a2c).
-  2) Vanilla REINFORCE with baseline.
-
   Args:
-    batch_rewards: Rewards received in each episode in the batch. A numpy array
-        of shape [batch_size, max_sequence_length]. Note, these are per-timestep
-        rewards, not total reward.
-    episode_lengths: Length of each episode. An iterable of length batch_size.
-    a2c: A bool. Whether to compute a2c targets (True) or vanilla targets
-        (False).
-    baselines: If a2c is False, provide baselines for each timestep. This is a
+    reinforce_branch: A Codebase with 'test_quality' metric
+    baselines: Provide baselines for each timestep. This is a
         list (or indexable container) of length max_time. Note: baselines are
         shared across all episodes, which is why there is no batch dimension.
         It is up to the caller to update baselines accordingly.
-    batch_values: If a2c is True, provide values computed by a value estimator.
-        A numpy array of shape [batch_size, max_sequence_length].
 
   Returns:
-    batch_targets: REINFORCE targets for each episode and timestep. A numpy
+    lengths: Length of every episode
+    actions: List of actions for every episode
+    targets: REINFORCE targets for each episode and timestep. A numpy
         array of shape [batch_size, max_sequence_length].
-    batch_returns: Returns computed for each episode and timestep. This is for
+    returns: Returns computed for each episode and timestep. This is for
         reference, and is not used in the REINFORCE gradient update (but was
         used to compute the targets). A numpy array of shape
         [batch_size, max_sequence_length].
   """
-  num_programs = len(batch_rewards)
-  assert num_programs <= len(episode_lengths), f'Got more program lengths ({len(episode_lengths)}) than programs ({num_programs})'
+  assert 'test_quality' in reinforce_branch.metrics, 'Reinforcement has to contain a quality metric'
+
+  lengths = [len(code) for code in reinforce_branch['code']]
+
+  # We only reward the last character
+  # Everything else is a preparation for dat final punch
+  action_rewards = utils.stack_pad(
+    [[0] * (episode_length - 1) + [episode_reward]
+     for episode_reward, episode_length in 
+     zip(reinforce_branch['test_quality'], lengths)],
+     pad_axes=0
+  )
+
+  num_programs = len(action_rewards)
+  
   batch_returns = [None] * num_programs
   batch_targets = [None] * num_programs
   for i in xrange(num_programs):
-    episode_length = episode_lengths[i]
+    episode_length = lengths[i]
     # Compute target for each timestep.
-    # If we are computing A2C:
-    #    target_t = advantage_t = R_t - V(c_t)
-    #    where V(c_t) is a learned value function (provided as `values`).
-    # Otherwise:
     #    target_t = R_t - baselines[t]
     #    where `baselines` are provided.
     # In practice we use a more generalized formulation of advantage. See docs
     # for `discounted_advantage_and_rewards`.
-    if a2c:
-      # Compute advantage.
-      assert batch_values is not None
-      episode_values = batch_values[i, :episode_length]
-      episode_rewards = batch_rewards[i]
-      emp_val, gen_adv = rollout_lib.discounted_advantage_and_rewards(
-          episode_rewards, episode_values, gamma=1.0, lambda_=1.0)
-      batch_returns[i] = emp_val
-      batch_targets[i] = gen_adv
-    else:
-      # Compute return for each timestep. See section 3 of
-      # https://arxiv.org/pdf/1602.01783.pdf
-      assert baselines is not None
-      empirical_returns = rollout_lib.discount(batch_rewards[i], gamma=1.0)
-      targets = [None] * episode_length
-      for j in xrange(episode_length):
-        targets[j] = empirical_returns[j] - baselines[j]
-      batch_returns[i] = empirical_returns
-      batch_targets[i] = targets
-  batch_returns = utils.stack_pad(batch_returns, 0)
-  if num_programs:
-    batch_targets = utils.stack_pad(batch_targets, 0)
-  else:
-    batch_targets = np.array([], dtype=np.float32)
+    
+    # Compute return for each timestep. See section 3 of
+    # https://arxiv.org/pdf/1602.01783.pdf
+    assert baselines is not None
+    empirical_returns = rollout_lib.discount(action_rewards[i], gamma=1.0)
+    targets = [None] * episode_length
+    for j in xrange(episode_length):
+      targets[j] = empirical_returns[j] - baselines[j]
+    batch_returns[i] = empirical_returns
+    batch_targets[i] = targets
 
-  return (batch_targets, batch_returns)
+  actions = utils.stack_pad(
+            [bf_char_to_int(code)
+              for code in reinforce_branch['code']], 
+              pad_axes=0)
+  actions = np.array(actions, dtype=int)
+
+  returns = utils.stack_pad(batch_returns, 0)
+  if num_programs:
+    targets = utils.stack_pad(batch_targets, 0)
+  else:
+    targets = np.array([], dtype=np.float32)
+
+  return (lengths, actions, targets, returns)

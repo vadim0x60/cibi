@@ -199,13 +199,12 @@ class ActionSampler:
     
 class Executable(Agent):
   def __init__(self, code, observation_discretizer, action_sampler,
-               log_probs=None, value_estimate=None,
+               log_prob=None,
                init_memory=None, null_value=0,
                max_steps=2 ** 20, require_correct_syntax=True, debug=False,
                cycle = False):
     self.code = code
-    self.log_probs = log_probs
-    self.value_estimate = value_estimate
+    self.log_prob = log_prob
 
     code = list(code)
     self.bracemap, correct_syntax = buildbracemap(code)  # will modify code list
@@ -249,9 +248,6 @@ class Executable(Agent):
           codeptr=self.codeptr, codechar=command, memptr=self.cellptr,
           memval=self.read(), memory=list(self.cells),
           state=self.state, action_stack=self.action_stack))
-
-  def value(self):
-    return self.value_estimate
 
   def done(self):
     if self.state != State.FINISHED:

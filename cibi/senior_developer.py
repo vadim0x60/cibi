@@ -18,45 +18,6 @@ Reinforcement = namedtuple(
      'episode_actions', 'action_rewards', 'action_log_probs', 
      'episode_rewards', 'episode_values', 'episode_results'])
 
-def calculate_reinforcement(feedback_branch): 
-  episode_rewards = np.array(feedback_branch['test_quality'])
-
-  episode_code_strings = list(feedback_branch['code'])
-  episode_lengths = np.array(
-    [len(code) for code in feedback_branch['code']]
-  )
-  # We only reward the last character
-  # Everything else is a preparation for dat final punch
-  action_rewards = utils.stack_pad(
-    [[0] * (episode_length - 1) + [episode_reward]
-     for episode_reward, episode_length in zip(episode_rewards, episode_lengths)],
-     pad_axes=0
-  )
-  action_rewards = np.array(action_rewards)
-  action_log_probs = utils.stack_pad(feedback_branch['log_probs'], pad_axes=0)
-  
-  episode_values = np.array(
-    feedback_branch['value_estimate']
-  )
-  episode_actions = utils.stack_pad(
-                    [bf_char_to_int(code)
-                     for code in episode_code_strings], 
-                     pad_axes=0)
-  episode_actions = np.array(episode_actions, dtype=int)
-
-  episode_results = list(feedback_branch['result'])
-
-  return Reinforcement(episode_count = len(episode_lengths),
-                       episode_lengths=episode_lengths,
-                       action_rewards=action_rewards,
-                       action_log_probs=action_log_probs,
-                       episode_rewards=episode_rewards,
-                       episode_values=episode_values,
-                       episode_code_strings=episode_code_strings,
-                       episode_actions=episode_actions,
-                       episode_results=episode_results)
-
-
 def make_initialized_variable(value, name, shape=None, dtype=tf.float32):
   """Create a tf.Variable with a constant initializer.
 
@@ -116,8 +77,6 @@ class SeniorDeveloper(object):
 
       logging_file = os.path.join(
           logging_dir, 'solutions_%d.txt' % task_id)
-      experience_replay_file = os.path.join(
-          logging_dir, 'replay_buffer_%d.pickle' % task_id)
       self.topk_file = os.path.join(
           logging_dir, 'topk_buffer_%d.pickle' % task_id)
 
@@ -172,7 +131,6 @@ class SeniorDeveloper(object):
           self.model = model = make_language_model(
               config,
               logging_file=logging_file,
-              experience_replay_file=experience_replay_file,
               dtype=dtype,
               global_best_reward_fn=self.assign_global_best_reward_fn,
               program_count=self.program_count,
@@ -214,20 +172,6 @@ class SeniorDeveloper(object):
 
       logger.info('summary_interval: %d', self.summary_interval)
 
-      # Load top-k buffer.
-      if self.model.top_episodes is not None and tf.gfile.Exists(self.topk_file):
-        try:
-          with tf.gfile.FastGFile(self.topk_file, 'r') as f:
-            self.model.top_episodes = pickle.loads(f.read())
-          logger.info(
-              'Loaded top-k buffer from disk with %d items. Location: "%s"',
-              len(self.model.top_episodes), self.topk_file)
-        except (pickle.UnpicklingError, EOFError) as e:
-          logger.warn(
-              'Failed to load existing top-k buffer from disk. Removing bad file.'
-              '\nLocation: "%s"\nException: %s', self.topk_file, str(e))
-          tf.gfile.Remove(self.topk_file)
-
       variables_to_save = [v for v in tf.global_variables()
                           if v.name.startswith('global')]
       self.ready_op = tf.report_uninitialized_variables(variables_to_save)
@@ -241,11 +185,11 @@ class SeniorDeveloper(object):
     self.cached_global_step, self.cached_global_npe = session.run(
         [self.global_step, self.program_count])
 
-  def write_programs(self, session):
+  def write_programs(self, session, inspiration_branch):
     session.run(self.sync_op)  # Copy weights from global to local.
 
     with session.as_default():
-      return self.model.write_programs(session)
+      return self.model.write_programs(session, inspiration_branch)
 
   def _log_reflection_result(self, session, reflection_result):
     global_step = reflection_result.global_step
@@ -274,7 +218,7 @@ class SeniorDeveloper(object):
         self.summary_writer.add_summary(s, global_step)
       self.last_summary_time = time.time()
 
-  def reflect(self, session, reinforcement):
+  def accept_feedback(self, session, feedback_branch):
     """Run an update step.
 
     1) Asynchronously copy global weights to local model.
@@ -290,8 +234,9 @@ class SeniorDeveloper(object):
     session.run(self.sync_op)  # Copy weights from global to local.
 
     with session.as_default():
-      result = self.model.reflect(session, reinforcement, self.train_op,
-          self.global_step)
+      result = self.model.accept_feedback(
+          session, feedback_branch, 
+          self.train_op, self.global_step)
       global_step = result.global_step
       global_npe = result.global_npe
     self.cached_global_step = global_step
@@ -337,11 +282,10 @@ class EmployedDeveloper(Developer):
     self.batch_size = developer.batch_size
 
   def write_programs(self, inspiration_branch):
-    return self.developer.write_programs(self.session)
+    return self.developer.write_programs(self.session, inspiration_branch)
 
   def accept_feedback(self, feedback_branch):
-    reinforcement = calculate_reinforcement(feedback_branch)
-    return self.developer.reflect(self.session, reinforcement)
+    return self.developer.accept_feedback(self.session, feedback_branch)
 
   def __enter__(self):
     self.session = self.session_manager.__enter__()

@@ -17,10 +17,6 @@ class Agent():
     def act(self):
         raise NotImplementedError
 
-    def value(self):
-        """Ask the agent how it's doing. Quantitative estimates only"""
-        return 0
-
     def reward(self, reward):
         pass
 
@@ -50,7 +46,7 @@ class Agent():
                 action = self.act()
                 prev_observation = observation
                 observation, reward, done, info = env.step(action)
-                rollout.add(prev_observation, action, reward, self.value(), done)
+                rollout.add(prev_observation, action, reward, done)
                 self.reward(reward)
 
                 if done:
