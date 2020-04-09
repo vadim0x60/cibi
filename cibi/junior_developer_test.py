@@ -2,6 +2,7 @@ import numpy as np
 
 
 from cibi.junior_developer import JuniorDeveloper
+from cibi.codebase import Codebase
 from cibi import bf
 
 import logging
@@ -11,11 +12,12 @@ logger.setLevel(logging.INFO)
 logger.addHandler(logging.StreamHandler())
 
 dev = JuniorDeveloper()
-program_pool = [
+codebase = Codebase(metrics=['test_quality'])
+for program in [
     "+.>4ae.",
     "+.e.4e",
     "2.c-[4c,][4][]+>e3-",
     "c1,>[d,+..2]e<"
-]
-program_pool = [bf.Program(p) for p in program_pool]
-print([p.code for p in dev.write_programs(program_pool, np.ones(4))])
+]:
+    codebase.commit(program, metrics={'test_quality': 1})
+print(dev.write_programs(codebase)['code'])

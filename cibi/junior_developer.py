@@ -1,6 +1,7 @@
 from cibi import bf
 from cibi.developer import Developer
 from cibi.codebase import make_dev_codebase
+from cibi.genome import make_chromosome_from_blueprint
 
 from deap.tools import crossover, mutation
 import re
@@ -45,9 +46,9 @@ mutation_modes = {
 
 def mutate(inspiration_branch, strategy):  
     old_code, _, _ = inspiration_branch.sample(1, metric='test_quality').peek()
-    mutation_name, mutation = select(list(mutation_modes.items()), weights=strategy['mutation_modes_distribution'])[0]
+    mutation_name, mutation = select(list(mutation_modes.items()), weights=strategy['mutation_modes_distribution'].get())[0]
     logger.info(f'{mutation_name} mutation of {old_code}')
-    new_code = ''.join(mutation(list(old_code), strategy['indpb']))
+    new_code = ''.join(mutation(list(old_code), strategy['indpb'].get()))
     
     codebase = make_dev_codebase()
     codebase.commit(new_code)
@@ -75,11 +76,11 @@ mating_modes = {
 # but beware!
 
 def mate(inspiration_branch, strategy):
-    program1, program2 = inspiration_branch.sample(2, metric='test_quality')['code']
+    program1, program2 = inspiration_branch.sstructureample(2, metric='test_quality')['code']
     code1, code2 = list(program1.code), list(program2.code)
-    crossover_name, crossover = select(list(mating_modes.items()), weights=strategy['mating_modes_distribution'])[0]
+    crossover_name, crossover = select(list(mating_modes.items()), weights=strategy['mating_modes_distribution'].get())[0]
     logger.info(f'{crossover_name} crossover between {code1} and {code2}')
-    crossover(code1, code2, strategy['indpb'])
+    crossover(code1, code2, strategy['indpb'].get())
 
     codebase = make_dev_codebase()
     codebase.commit(''.join(code1))
@@ -92,38 +93,22 @@ available_actions = {
     'mate': mate
 }
 
-strategy_genome = {
-    'action_distribution': len(available_actions),
-    'mutation_modes_distribution': len(mutation_modes),
-    'mating_modes_distribution': len(mating_modes),
-    'indpb': 1
-}
-
 default_strategy = {
     # All options equal. Sounds like a good default
     'action_distribution': np.ones(len(available_actions)),
     'mutation_modes_distribution': np.ones(len(mutation_modes)),
     'mating_modes_distribution': np.ones(len(mating_modes)),
-    'indpb': 0.2
+    'indpb': np.array([0.2])
 }
 
-def parse_strategy_vector(strategy_vector):
-    strategy = {}
-    for param_name, param_size in strategy_genome.items():
-        strategy[param_name] = strategy_vector[:param_size]
-        strategy_vector = strategy_vector[param_size:]
-    return strategy
-
 class JuniorDeveloper(Developer):
-    def __init__(self, strategy_vector=None):
-        if strategy_vector:
-            self.strategy_vector = strategy_vector
-            self.strategy = parse_strategy_vector(strategy_vector)
-        else:
-            self.strategy = default_strategy
+    def __init__(self, strategy=None):
+        if strategy is None:
+            strategy = make_chromosome_from_blueprint(default_strategy)
+        self.strategy = strategy
 
     def write_programs(self, inspiration_branch):
-        action_distribution = self.strategy['action_distribution']
+        action_distribution = self.strategy['action_distribution'].get()
         action_name, act = select(list(available_actions.items()), 
                                   weights=action_distribution)[0]
         logger.info(f'Junior developer decided to {action_name}')
