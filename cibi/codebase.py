@@ -25,11 +25,13 @@ class Codebase():
 
     def __init__(self, metrics=[], 
                        metadata=[],  
+                       deduplication=True,
                        save_file=None,
                        flush_every=20):
         self.metrics = metrics
         self.metadata = metadata
         self.save_file = save_file
+        self.deduplication = deduplication
 
         assert type(flush_every) == int and flush_every > 0
         self.flush_every = flush_every
@@ -46,36 +48,43 @@ class Codebase():
         except (FileNotFoundError, AssertionError):
             self.data_frame = make_dataframe(columns=columns, 
                                              dtypes=types, 
-                                             index_column='code')
+                                             index_column='code' if deduplication else None)
 
-    def commit(self, code, metrics={}, metadata={}):
-        try:
-            program_row = self.data_frame.loc[code]
-            program_count = program_row['count']
-
-            for metric in self.metrics:
-                try:
-                    # We store mean metrics over all occurences of the program
-                    program_row[metric] = ((program_row[metric] * program_count + metrics[metric]) 
-                                          / (program_count + 1))
-                except KeyError:
-                    pass
-            program_row['count'] = program_count + 1
-
-            for metadata_column in self.metadata:
-                try:
-                    # We store metadata only for the last occurence of the program
-                    program_row[metadata_column] = metadata[metadata_column]
-                except KeyError:
-                    pass
-        except KeyError:
+    def commit(self, code, metrics={}, metadata={}, count=1):
+        def append_row(row_count):
             new_row = {
                 'code': code,
-                'count': 1,
+                'count': row_count,
                 **metrics,
                 **metadata
             }
             self.data_frame = self.data_frame.append(pd.Series(name=code,data=new_row))
+
+        if self.deduplication:
+            try:
+                program_row = self.data_frame.loc[code]
+                program_count = program_row['count']
+
+                for metric in self.metrics:
+                    try:
+                        # We store mean metrics over all occurences of the program
+                        program_row[metric] = ((program_row[metric] * program_count + metrics[metric]) 
+                                            / (program_count + count))
+                    except KeyError:
+                        pass
+                program_row['count'] = program_count + 1
+
+                for metadata_column in self.metadata:
+                    try:
+                        # We store metadata only for the last occurence of the program
+                        program_row[metadata_column] = metadata[metadata_column]
+                    except KeyError:
+                        pass
+            except KeyError:
+                append_row(count)
+        else:    
+            for x in range(count):
+                append_row(1)
 
         if self.flush_ttl == 0:
             self.flush()
@@ -83,39 +92,34 @@ class Codebase():
         else:
             self.flush_ttl -= 1
 
-    def assert_same_structure(self, other_codebase):
-        metric_err = f'One codebase has metrics {other_codebase.metrics}, the other {self.metrics}'
-        metadata_err = f'One codebase has metrics {other_codebase.metadata}, the other {self.metadata}'
-        
-        assert self.metrics == other_codebase.metrics, metric_err
-        assert self.metadata == other_codebase.metadata, metadata_err
-
     def merge(self, other_codebase):
-        self.assert_same_structure(other_codebase)
-        self.data_frame = self.data_frame.append(other_codebase.data_frame)
+        assert self.metrics == other_codebase.metrics
+        assert self.metadata == other_codebase.metadata
 
-    def __add__(self, other_codebase):
-        self.assert_same_structure(other_codebase)
-        codebase = Codebase(metrics=self.metrics, metadata=self.metadata)
-        codebase.merge(self)
-        codebase.merge(other_codebase)
-        return codebase
+        for _, row in other_codebase.data_frame.iterrows():
+            metrics = {metric: row[metric] for metric in self.metrics}
+            metadata = {meta: row[meta] for meta in self.metadata}
+            self.commit(row['code'], metrics=metrics, 
+                                     metadata=metadata, 
+                                     count=row['count'])
 
     def replace(self, other_codebase):
-        self.assert_same_structure(other_codebase)
+        assert self.metrics == other_codebase.metrics
+        assert self.metadata == other_codebase.metadata
+        assert other_codebase.deduplication
+
         for code, data in other_codebase.data_frame.iterrows():
-            self.data_frame[code] = data
+            self.data_frame.replace(self.data_frame['code'] == code, data, inplace=True)
 
     def select(self, codes):
-        subcodebase = Codebase(metrics=self.metrics, metadata=self.metadata)
+        subcodebase = make_codebase_like(self)
         subcodebase.data_frame = self.data_frame.loc[codes]
         return subcodebase
 
     def top_k(self, metric, k=3):
-        assert metric in self.metrics
+        assert metric in self.metrics, f'{metric} column not present in this codebase'
 
-        sampled_codebase = Codebase(metrics=self.metrics,
-                                    metadata=self.metadata)
+        sampled_codebase = make_codebase_like(self)
         sampled_codebase.data_frame = self.data_frame.nlargest(k, metric)
         return sampled_codebase
 
@@ -143,8 +147,7 @@ class Codebase():
         if sampled_data_frame is None:
             sampled_data_frame = self.data_frame.sample(n=n, weights=None)
 
-        sampled_codebase = Codebase(metrics=self.metrics,
-                                    metadata=self.metadata)
+        sampled_codebase = make_codebase_like(self)
         sampled_codebase.data_frame = sampled_data_frame
         return sampled_codebase
 
@@ -167,11 +170,19 @@ class Codebase():
 
 def make_dev_codebase():
     return Codebase(metrics=['log_prob'],
-                    metadata=[])
+                    metadata=[],
+                    deduplication=False)
 
-def make_prod_codebase():
+def make_prod_codebase(deduplication):
     return Codebase(metrics=['test_quality', 'replay_weight', 'log_prob'],
-                    metadata=['result'])
+                    metadata=['result'],
+                    deduplication=deduplication)
+
+def make_codebase_like(other_codebase):
+    c = Codebase(metrics=other_codebase.metrics,
+                 metadata=other_codebase.metadata,
+                 deduplication=other_codebase.deduplication)
+    return c
 
 if __name__ == '__main__':
     codebase = Codebase()

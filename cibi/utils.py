@@ -200,3 +200,11 @@ def get_dir_out_of_the_way(path):
         if not os.path.exists(alternative_path):
             shutil.move(path, alternative_path)
             break
+
+def parse_config_string(config_str):
+  config = {}
+  for config_statement in config_str.split(','):
+    if config_statement:
+      key, value = config_statement.split('=')
+      config[key] = value
+  return config

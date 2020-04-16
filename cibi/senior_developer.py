@@ -7,7 +7,6 @@ import numpy as np
 from collections import namedtuple
 
 from cibi import utils
-from cibi.developer import Developer
 from cibi.bf import bf_char_to_int
 
 logger = logging.getLogger(f'cibi.{__file__}')
@@ -54,7 +53,6 @@ class SeniorDeveloper(object):
                summary_interval=1,
                run_number=0,
                logging_dir='/tmp', model_v=0):
-    self.batch_size = config.batch_size
     self.task_id = task_id
     self.ps_tasks = ps_tasks
     self.is_chief = is_chief
@@ -268,10 +266,29 @@ class SeniorDeveloper(object):
       with tf.gfile.FastGFile(self.topk_file, 'w') as f:
         f.write(pickle.dumps(self.model.top_episodes))
 
+  def hire(self, log_dir, events_dir=None, is_chief=True):
+    with self.graph.as_default():
+      summary_writer = tf.summary.FileWriter(events_dir) if events_dir else None
+
+      sv = tf.train.Supervisor( is_chief=is_chief,
+                                logdir=log_dir,
+                                saver=self.saver,
+                                summary_op=None,
+                                init_op=self.global_init_op,
+                                init_fn=init_fn,
+                                summary_writer=summary_writer,
+                                ready_op=self.ready_op,
+                                ready_for_local_init_op=None,
+                                global_step=self.global_step,
+                                save_model_secs=30,
+                                save_summaries_secs=30)
+
+      return EmployedDeveloper(self, sv.managed_session())
+
 def init_fn(unused_sess):
   logger.info('No checkpoint found. Initialized global params.')
 
-class EmployedDeveloper(Developer):
+class EmployedDeveloper():
   """
   A senior developer compatible with Scrum Master
   """
@@ -279,7 +296,6 @@ class EmployedDeveloper(Developer):
   def __init__(self, developer, session_manager):
     self.developer = developer
     self.session_manager = session_manager
-    self.batch_size = developer.batch_size
 
   def write_programs(self, inspiration_branch):
     return self.developer.write_programs(self.session, inspiration_branch)
@@ -295,22 +311,3 @@ class EmployedDeveloper(Developer):
   def __exit__(self, type, value, tb):
     self.session_manager.__exit__(type, value, tb)
     self.session = None
-
-def hire(developer, log_dir, events_dir=None, is_chief=True):
-  with developer.graph.as_default():
-    summary_writer = tf.summary.FileWriter(events_dir) if events_dir else None
-
-    sv = tf.train.Supervisor( is_chief=is_chief,
-                              logdir=log_dir,
-                              saver=developer.saver,
-                              summary_op=None,
-                              init_op=developer.global_init_op,
-                              init_fn=init_fn,
-                              summary_writer=summary_writer,
-                              ready_op=developer.ready_op,
-                              ready_for_local_init_op=None,
-                              global_step=developer.global_step,
-                              save_model_secs=30,
-                              save_summaries_secs=30)
-
-    return EmployedDeveloper(developer, sv.managed_session())

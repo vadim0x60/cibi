@@ -17,10 +17,11 @@ class ScrumMaster(Agent):
     At the moment, Scrum Master is only able to manage one developer
     """
 
-    def __init__(self, developers, env, sprint_length, stretch_sprints=True,
-                 cycle_programs=True, syntax_error_reward=0, replay_temperature=0):
-        self.developers = itertools.cycle(developers)
-        self.lead_developer = next(self.developers)
+    def __init__(self, developers, env, sprint_length=100, stretch_sprints=True,
+                 cycle_programs=True, syntax_error_reward=0, replay_temperature=1):
+        self.developers = developers
+        self.developer_queue = itertools.cycle(developers)
+        self.lead_developer = next(self.developer_queue)
         # TODO: config discretization steps
         self.observation_discretizer = bf.observation_discretizer(env.observation_space)
         self.action_sampler = bf.ActionSampler(env.action_space)
@@ -35,11 +36,20 @@ class ScrumMaster(Agent):
         self.sprints_elapsed = 0
 
         self.dev_branch = make_dev_codebase()
-        self.feedback_branch = make_prod_codebase()
-        self.archive_branch = make_prod_codebase()
+        self.feedback_branch = make_prod_codebase(deduplication=False)
+        self.archive_branch = make_prod_codebase(deduplication=True)
 
         self.prod_program = None
         self.prod_rewards = []
+
+    def __enter__(self):
+        for dev in self.developers:
+            dev.__enter__()
+        return self
+
+    def __exit__(self, type, value, tb):
+        for dev in self.developers:
+            dev.__exit__(type, value, tb)
 
     def finalize_episode(self):
         if self.prod_rewards:
@@ -97,6 +107,10 @@ class ScrumMaster(Agent):
             self.archive_branch.merge(self.feedback_branch)
             self.feedback_branch.clear()
 
+            # We are a flat team
+            # Lead developer rotates every sprint
+            self.lead_developer = next(self.developer_queue)
+
     def done(self):
         if self.sprint_ttl <= 0:
             self.reprogram()
@@ -135,7 +149,10 @@ class ScrumMaster(Agent):
                                           cycle=self.cycle_programs)
         self.sprint_ttl = self.sprint_length
         self.sprints_elapsed += 1
-        
-        # We are a flat team
-        # Lead developer rotates every sprint
-        self.lead_developer = next(self.developers)
+
+def hire_team(developers, env, log_dir, events_dir, scrum_master_args):
+    employees = [dev.hire(log_dir, events_dir) 
+                 for dev in developers]
+    manager = ScrumMaster(employees, env,
+                          **scrum_master_args)
+    return manager

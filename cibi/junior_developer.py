@@ -1,5 +1,4 @@
 from cibi import bf
-from cibi.developer import Developer
 from cibi.codebase import make_dev_codebase
 from cibi.genome import make_chromosome_from_blueprint
 
@@ -101,7 +100,7 @@ default_strategy = {
     'indpb': np.array([0.2])
 }
 
-class JuniorDeveloper(Developer):
+class JuniorDeveloper():
     def __init__(self, strategy=None):
         if strategy is None:
             strategy = make_chromosome_from_blueprint(default_strategy)
@@ -116,3 +115,12 @@ class JuniorDeveloper(Developer):
 
     def accept_feedback(self, feedback_branch):
         logger.info('If they were good at processing feedback, they wouldn\'t be a junior developer')
+
+    def hire(self, log_dir=None, events_dir=None, is_chief=True):
+        return self
+
+    def __enter__(self):
+        pass
+
+    def __exit__(self, type, value, tb):
+        pass

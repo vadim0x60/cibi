@@ -19,7 +19,7 @@ import tensorflow as tf
 import cibi.rollout as rollout_lib  # brain coder
 from cibi import utils
 from cibi import bf
-from cibi.codebase import make_dev_codebase
+from cibi.codebase import make_dev_codebase, make_codebase_like, Codebase
 from cibi.bf import BF_EOS_INT, BF_EOS_CHAR, BF_INT_TO_CHAR, BF_CHAR_TO_INT, bf_int_to_char, bf_char_to_int
 
 import logging
@@ -40,6 +40,42 @@ def rshift_time(tensor_2d, fill=BF_EOS_INT):
 ReflectionResult = namedtuple(
     'ReflectionResult',
     ['global_step', 'global_npe', 'summaries_list', 'gradients_dict'])
+
+LMConfig = namedtuple(
+  'NeuralParams',
+  ['policy_lstm_sizes', 'obs_embedding_size', 'grad_clip_threshold', 
+   'param_init_factor', 'lr', 'pi_loss_hparam', 'entropy_beta', 'regularizer',
+   'softmax_tr', 'optimizer', 'topk', 'topk_loss_hparam', 'topk_batch_size',
+   'ema_baseline_decay', 'alpha', 'iw_normalize', 'batch_size', 'timestep_limit']
+)
+
+default_config = {
+  'batch_size': 4,
+  'policy_lstm_sizes': [50,50],
+  'obs_embedding_size': 10,
+  'grad_clip_threshold': 10.0,
+  'param_init_factor':1.0,
+  'lr':5e-5,
+  'pi_loss_hparam':1.0,
+  'entropy_beta':1e-2,
+  'regularizer':0.0,
+  'softmax_tr':1.0,  # Reciprocal temperature.
+  'optimizer':'rmsprop',  # 'adam', 'sgd', 'rmsprop'
+  'topk':5,  # Top-k unique codes will be stored.
+  'topk_loss_hparam':0.5,  # off policy loss multiplier.
+  # Uniformly sample this many episodes from topk buffer per batch.
+  # If topk is 0, this has no effect.
+  'topk_batch_size':1,
+  'timestep_limit': 256,
+  # Exponential moving average baseline for REINFORCE.
+  # If zero, A2C is used.
+  # If non-zero, should be close to 1, like .99, .999, etc.
+  'ema_baseline_decay':0.99,
+  # Replay probability. 1 : always replay, 0 : always on policy.
+  'alpha':0.75,
+  # Whether to normalize importance weights in each minibatch.
+  'iw_normalize':True
+}
 
 def list_(x):
   return [] if x is None else list(x)
@@ -111,7 +147,7 @@ class LanguageModel:
   action_space = len(BF_INT_TO_CHAR)
   observation_space = len(BF_INT_TO_CHAR)
 
-  def __init__(self, global_config,
+  def __init__(self, config={},
                logging_file=None,
                global_best_reward_fn=None,
                program_count=None,
@@ -119,17 +155,20 @@ class LanguageModel:
                dtype=tf.float32,
                verbose_level=0,
                is_local=True):
-    self.config = config = global_config.agent
+    if type(config) == LMConfig:
+      self.config = config
+    elif type(config) == dict:
+      self.config = LMConfig(**{**default_config, **config})
+      config = None # prevent accidentaly using partial config
+    else:
+      raise ValueError('Unsupported configuration format. Should be a dict or LMConfigs')
+
     self.logging_file = logging_file
     self.verbose_level = verbose_level
     self.global_best_reward_fn = global_best_reward_fn
     self.parent_scope_name = tf.get_variable_scope().name
     self.dtype = dtype
-    self.allow_eos_token = config.eos_token
-    self.pi_loss_hparam = config.pi_loss_hparam
     self.is_local = is_local
-
-    self.batch_size = global_config.batch_size
 
     self.top_reward = 0.0
     self.embeddings_trainable = True
@@ -137,39 +176,31 @@ class LanguageModel:
     self.no_op = tf.no_op()
 
     self.learning_rate = tf.constant(
-        config.lr, dtype=dtype, name='learning_rate')
+        self.config.lr, dtype=dtype, name='learning_rate')
     self.initializer = tf.contrib.layers.variance_scaling_initializer(
-        factor=config.param_init_factor,
+        factor=self.config.param_init_factor,
         mode='FAN_AVG',
         uniform=True,
         dtype=dtype)  # TF's default initializer.
     tf.get_variable_scope().set_initializer(self.initializer)
 
     logger.info('Using exponential moving average REINFORCE baselines.')
-    self.ema_baseline_decay = config.ema_baseline_decay
-    self.ema_by_len = [0.0] * global_config.timestep_limit
+    self.ema_by_len = [0.0] * self.config.timestep_limit
 
     # Top-k
-    if config.topk and config.topk_loss_hparam:
-      self.topk = config.topk
-      self.topk_loss_hparam = config.topk_loss_hparam
-      self.topk_batch_size = config.topk_batch_size
-      if self.topk_batch_size <= 0:
-        raise ValueError('topk_batch_size must be a positive integer. Got %s',
-                         self.topk_batch_size)
-    else:
-      self.topk = 0
-      self.topk_loss_hparam = 0.0
+    topk_params = (self.config.topk, self.config.topk_loss_hparam, self.config.topk_batch_size)
+    if any(p != 0 for p in topk_params):
+      assert all(p > 0 for p in topk_params)
 
     # Experience replay.
-    if config.replay_temperature == 0:
+    if self.config.alpha == 0:
       self.num_replay_per_batch = 0
     else:
-      self.num_replay_per_batch = int(global_config.batch_size * config.alpha)
+      self.num_replay_per_batch = int(self.config.batch_size * self.config.alpha)
     self.num_on_policy_per_batch = (
-        global_config.batch_size - self.num_replay_per_batch)
+        self.config.batch_size - self.num_replay_per_batch)
     self.replay_alpha = (
-        self.num_replay_per_batch / float(global_config.batch_size))
+        self.num_replay_per_batch / float(self.config.batch_size))
     logger.info('num_replay_per_batch: %d', self.num_replay_per_batch)
     logger.info('num_on_policy_per_batch: %d', self.num_on_policy_per_batch)
     logger.info('replay_alpha: %s', self.replay_alpha)
@@ -184,16 +215,16 @@ class LanguageModel:
     ################################
     # RL policy network #
     ################################
-    batch_size = global_config.batch_size
+    batch_size = self.config.batch_size
     logger.info('batch_size: %d', batch_size)
 
     self.policy_cell = LinearWrapper(
         tf.contrib.rnn.MultiRNNCell(
             [tf.contrib.rnn.BasicLSTMCell(cell_size)
-             for cell_size in config.policy_lstm_sizes]),
+             for cell_size in self.config.policy_lstm_sizes]),
         self.action_space,
         dtype=dtype,
-        suppress_index=None if self.allow_eos_token else BF_EOS_INT)
+        suppress_index=None)
 
     obs_embedding_scope = 'obs_embed'
     with tf.variable_scope(
@@ -201,7 +232,7 @@ class LanguageModel:
         initializer=tf.random_uniform_initializer(minval=-1.0, maxval=1.0)):
       obs_embeddings = tf.get_variable(
           'embeddings',
-          [self.observation_space, config.obs_embedding_size],
+          [self.observation_space, self.config.obs_embedding_size],
           dtype=dtype, trainable=self.embeddings_trainable)
       self.obs_embeddings = obs_embeddings
 
@@ -253,7 +284,7 @@ class LanguageModel:
             elements_finished
         )
       else:
-        scaled_logits = cell_output * config.softmax_tr  # Scale temperature.
+        scaled_logits = cell_output * self.config.softmax_tr  # Scale temperature.
         prev_chosen, prev_output_lengths, prev_elements_finished = loop_state
         next_cell_state = cell_state
         chosen_outputs = tf.to_int32(tf.where(
@@ -262,7 +293,7 @@ class LanguageModel:
             tf.zeros([batch_size], dtype=tf.int64)))
         elements_finished = tf.logical_or(
             tf.equal(chosen_outputs, BF_EOS_INT),
-            loop_time >= global_config.timestep_limit)
+            loop_time >= self.config.timestep_limit)
         output_lengths = tf.where(
             elements_finished,
             prev_output_lengths,
@@ -377,7 +408,7 @@ class LanguageModel:
 
     # off-policy loss
     self.offp_switch = tf.placeholder(dtype, [], name='offp_switch')
-    if self.topk != 0:
+    if self.config.topk != 0:
       # Add SOS to beginning of the sequence.
       offp_inputs = tf.gather(obs_embeddings,
                               rshift_time(self.off_policy_targets,
@@ -401,11 +432,11 @@ class LanguageModel:
       self.topk_loss = topk_loss = 0.0
 
     self.entropy_hparam = tf.constant(
-        config.entropy_beta, dtype=dtype, name='entropy_beta')
+        self.config.entropy_beta, dtype=dtype, name='entropy_beta')
 
-    self.pi_loss_term = pi_loss * self.pi_loss_hparam
+    self.pi_loss_term = pi_loss * self.config.pi_loss_hparam
     self.entropy_loss_term = self.negentropy * self.entropy_hparam
-    self.topk_loss_term = self.topk_loss_hparam * topk_loss
+    self.topk_loss_term = self.config.topk_loss_hparam * topk_loss
     self.loss = (
         self.pi_loss_term
         + self.entropy_loss_term
@@ -420,10 +451,10 @@ class LanguageModel:
     self.non_embedding_params = non_embedding_params
     self.params = params
 
-    if config.regularizer:
+    if self.config.regularizer:
       logger.info('Adding L2 regularizer with scale %.2f.',
-                   config.regularizer)
-      self.regularizer = config.regularizer * sum(
+                   self.config.regularizer)
+      self.regularizer = self.config.regularizer * sum(
           tf.nn.l2_loss(w) for w in non_embedding_params)
       self.loss += self.regularizer
     else:
@@ -436,9 +467,9 @@ class LanguageModel:
       self.dense_unclipped_grads = [
           tf.convert_to_tensor(g) for g in unclipped_grads]
       self.grads, self.global_grad_norm = tf.clip_by_global_norm(
-          unclipped_grads, config.grad_clip_threshold)
+          unclipped_grads, self.config.grad_clip_threshold)
       self.gradients_dict = dict(zip(params, self.grads))
-      self.optimizer = make_optimizer(config.optimizer, self.learning_rate)
+      self.optimizer = make_optimizer(self.config.optimizer, self.learning_rate)
       self.all_variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
                                              tf.get_variable_scope().name)
 
@@ -522,7 +553,7 @@ class LanguageModel:
          tf.summary.scalar('model/non_embedding_var_norm',
                            tf.global_norm(self.non_embedding_params)),
          tf.summary.scalar('hparams/entropy_beta', self.entropy_hparam),
-         tf.summary.scalar('hparams/topk_loss_hparam', self.topk_loss_hparam),
+         tf.summary.scalar('hparams/topk_loss_hparam', self.config.topk_loss_hparam),
          tf.summary.scalar('hparams/learning_rate', self.learning_rate),
          tf.summary.scalar('model/trainable_var_norm',
                            tf.global_norm(self.trainable_variables)),
@@ -662,11 +693,16 @@ class LanguageModel:
       global step, global NPE, serialized summaries, and optionally gradients.
     """
     assert self.is_local
-    assert len(feedback_branch) == self.batch_size
+    assert len(feedback_branch) == self.config.batch_size
 
-    if self.topk != 0:
-      off_policy_branch = self.inspiration_branch.top_k(self.topk).sample(self.topk_batch_size)
+    if self.config.topk != 0:
+      off_policy_branch = self.inspiration_branch.top_k('test_quality', self.config.topk)
+      if len(off_policy_branch) > self.config.topk_batch_size:
+        off_policy_branch = off_policy_branch.sample(self.config.topk_batch_size)
+    else:
+      off_policy_branch = make_codebase_like(self.inspiration_branch)
       
+    if len(off_policy_branch):
       off_policy_target_lengths, off_policy_targets, _, _ = \
         process_episodes(off_policy_branch, self.ema_by_len)
       
@@ -682,7 +718,7 @@ class LanguageModel:
     # Do update for REINFORCE or REINFORCE + replay buffer.
     if self.num_replay_per_batch == 0:
       # Train with on-policy REINFORCE.
-      num_programs_from_policy = len(feedback_branch)
+      num_programs_from_policy = self.config.batch_size
       
       # Process on-policy samples.
      
@@ -717,7 +753,7 @@ class LanguageModel:
       num_programs_from_replay_buff = (
           self.num_replay_per_batch if not empty_replay_buffer else 0)
       num_programs_from_policy = (
-          self.batch_size - num_programs_from_replay_buff)
+          self.config.batch_size - num_programs_from_replay_buff)
       if (not empty_replay_buffer) and num_programs_from_replay_buff:
         replay_branch = self.inspiration_branch.sample(num_programs_from_replay_buff)
         replay_lengths, replay_actions, replay_batch_targets, replay_returns = \
@@ -822,10 +858,17 @@ class LanguageModel:
         # importance weight
         # = 1 / [(1 - a) + a * exp(log(replay_weight / total_weight / p))]
         # = 1 / ((1-a) + a*q/p)
-        importance_weights = compute_iw(on_policy_branch + replay_branch, self.replay_alpha)
+        combined_branch = Codebase(on_policy_branch.metrics,
+                                   on_policy_branch.metadata,
+                                   deduplication=False)
+        combined_branch.merge(on_policy_branch)
+        combined_branch.merge(replay_branch)
+
+        importance_weights = compute_iw(combined_branch, self.replay_alpha)
+        
         if self.config.iw_normalize:
           importance_weights *= (
-              float(self.batch_size) / importance_weights.sum())
+              float(self.config.batch_size) / importance_weights.sum())
         combined_policy_multipliers *= importance_weights.reshape(-1, 1)
 
       # Train on replay batch, top-k MLE.
@@ -858,8 +901,8 @@ class LanguageModel:
       for j in xrange(episode_length):
         # Update ema_baselines in place.
         self.ema_by_len[j] = (
-            self.ema_baseline_decay * self.ema_by_len[j]
-            + (1 - self.ema_baseline_decay) * empirical_returns[j])
+            self.config.ema_baseline_decay * self.ema_by_len[j]
+            + (1 - self.config.ema_baseline_decay) * empirical_returns[j])
 
     global_step = fetched['global_step']
     global_npe = fetched['program_count']
@@ -960,6 +1003,7 @@ def process_episodes(reinforce_branch, baselines=None):
         [batch_size, max_sequence_length].
   """
   assert 'test_quality' in reinforce_branch.metrics, 'Reinforcement has to contain a quality metric'
+  assert len(reinforce_branch)
 
   lengths = [len(code) for code in reinforce_branch['code']]
 
