@@ -72,7 +72,7 @@ class Codebase():
                                             / (program_count + count))
                     except KeyError:
                         pass
-                program_row['count'] = program_count + 1
+                program_row['count'] = program_count + count
 
                 for metadata_column in self.metadata:
                     try:
