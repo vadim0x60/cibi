@@ -9,6 +9,7 @@ from collections import deque
 import pickle
 import heapq
 import random
+import ast
 
 import numpy as np
 import six
@@ -206,5 +207,5 @@ def parse_config_string(config_str):
   for config_statement in config_str.split(','):
     if config_statement:
       key, value = config_statement.split('=')
-      config[key] = value
+      config[key] = ast.literal_eval(value)
   return config
