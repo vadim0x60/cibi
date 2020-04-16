@@ -48,9 +48,7 @@ def run_experiment(team_id, env_name, scrum_config, logdir, num_repetitions, num
 @click.option('--render', is_flag=True, help='Render the environment to monitor agents decisions')
 def run_experiments(team_id, env, num_sprints, scrum_config, logdir, num_repetitions, log_level, render=True):
     scrum_config = parse_config_string(scrum_config)
-    if 'program_file' not in scrum_config:
-        scrum_config['program_file'] = os.path.join(logdir, 'programs.pickle')
-
+    
     if num_repetitions == 1:
         experiment_dirs = [logdir]
     else:
@@ -60,6 +58,9 @@ def run_experiments(team_id, env, num_sprints, scrum_config, logdir, num_repetit
     for experiment_dir in experiment_dirs:
         get_dir_out_of_the_way(experiment_dir)
         os.makedirs(experiment_dir)
+
+        if 'program_file' not in scrum_config:
+            scrum_config['program_file'] = os.path.join(experiment_dir, 'programs.pickle')
 
         parent_logger = logging.getLogger('cibi')
         parent_logger.setLevel(log_level)
