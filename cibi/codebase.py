@@ -176,7 +176,7 @@ def make_dev_codebase(save_file=None):
 
 def make_prod_codebase(deduplication, save_file=None):
     return Codebase(metrics=['test_quality', 'replay_weight', 'log_prob'],
-                    metadata=['result'],
+                    metadata=['result', 'author'],
                     deduplication=deduplication,
                     save_file=save_file)
 

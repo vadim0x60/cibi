@@ -52,7 +52,9 @@ class SeniorDeveloper(object):
                dtype=tf.float32,
                summary_interval=1,
                run_number=0,
-               logging_dir='/tmp', model_v=0):
+               logging_dir='/tmp', model_v=0,
+               name='senior'):
+    self.name = name
     self.task_id = task_id
     self.ps_tasks = ps_tasks
     self.is_chief = is_chief
@@ -295,6 +297,7 @@ class EmployedDeveloper():
 
   def __init__(self, developer, session_manager):
     self.developer = developer
+    self.name = developer.name
     self.session_manager = session_manager
 
   def write_programs(self, inspiration_branch):

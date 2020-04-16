@@ -60,7 +60,8 @@ class ScrumMaster(Agent):
             metrics = {
                 'test_quality': q,
                 'replay_weight': exp(q / self.replay_temperature),
-                'log_prob': self.prod_program.log_prob
+                'log_prob': self.prod_program.log_prob,
+                'author': self.lead_developer.name
             }
 
             metadata = {
