@@ -18,7 +18,8 @@ class ScrumMaster(Agent):
     """
 
     def __init__(self, developers, env, sprint_length=100, stretch_sprints=True,
-                 cycle_programs=True, syntax_error_reward=0, replay_temperature=1):
+                 cycle_programs=True, syntax_error_reward=0, replay_temperature=1,
+                 program_file=None):
         self.developers = developers
         self.developer_queue = itertools.cycle(developers)
         self.lead_developer = next(self.developer_queue)
@@ -37,7 +38,8 @@ class ScrumMaster(Agent):
 
         self.dev_branch = make_dev_codebase()
         self.feedback_branch = make_prod_codebase(deduplication=False)
-        self.archive_branch = make_prod_codebase(deduplication=True)
+        self.archive_branch = make_prod_codebase(deduplication=True, 
+                                                 save_file=program_file)
 
         self.prod_program = None
         self.prod_rewards = []
@@ -114,6 +116,7 @@ class ScrumMaster(Agent):
     def done(self):
         if self.sprint_ttl <= 0:
             self.reprogram()
+        self.archive_branch.flush()
 
     def reward(self, reward):
         self.prod_rewards.append(reward)

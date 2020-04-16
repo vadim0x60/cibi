@@ -168,15 +168,17 @@ class Codebase():
         if self.save_file:
             self.data_frame.to_pickle(self.save_file)
 
-def make_dev_codebase():
+def make_dev_codebase(save_file=None):
     return Codebase(metrics=['log_prob'],
                     metadata=[],
-                    deduplication=False)
+                    deduplication=False,
+                    save_file=save_file)
 
-def make_prod_codebase(deduplication):
+def make_prod_codebase(deduplication, save_file=None):
     return Codebase(metrics=['test_quality', 'replay_weight', 'log_prob'],
                     metadata=['result'],
-                    deduplication=deduplication)
+                    deduplication=deduplication,
+                    save_file=save_file)
 
 def make_codebase_like(other_codebase):
     c = Codebase(metrics=other_codebase.metrics,
