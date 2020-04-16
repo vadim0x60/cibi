@@ -40,17 +40,19 @@ mutation_modes = {
     # We ban idx=0, because 0 means EOS and we don't want EOS popping up mid-code
     # This is very BF-specific, implementation-specific and unobvious
     # FIXME
-    'uniform': mut_with_number_arrays(lambda code, indpb: mutation.mutUniformInt(code, 1, len(bf.BF_INT_TO_CHAR), indpb)[0])
+    'uniform': mut_with_number_arrays(lambda code, indpb: mutation.mutUniformInt(code, 1, len(bf.BF_INT_TO_CHAR) - 1, indpb)[0])
 }
 
 def mutate(inspiration_branch, strategy):  
-    old_code, _, _ = inspiration_branch.sample(1, metric='test_quality').peek()
-    mutation_name, mutation = select(list(mutation_modes.items()), weights=strategy['mutation_modes_distribution'].get())[0]
-    logger.info(f'{mutation_name} mutation of {old_code}')
-    new_code = ''.join(mutation(list(old_code), strategy['indpb'].get()))
+    code, _, _ = inspiration_branch.sample(1, metric='test_quality').peek()
     
+    if len(code) > 1:
+        mutation_name, mutation = select(list(mutation_modes.items()), weights=strategy['mutation_modes_distribution'].get())[0]
+        logger.info(f'{mutation_name} mutation of {code}')
+        code = ''.join(mutation(list(code), strategy['indpb'].get()))
+        
     codebase = make_dev_codebase()
-    codebase.commit(new_code)
+    codebase.commit(code)
     return codebase
 
 def cx_with_number_arrays(crossover_over_numbers):
@@ -75,11 +77,14 @@ mating_modes = {
 # but beware!
 
 def mate(inspiration_branch, strategy):
-    program1, program2 = inspiration_branch.sstructureample(2, metric='test_quality')['code']
-    code1, code2 = list(program1.code), list(program2.code)
-    crossover_name, crossover = select(list(mating_modes.items()), weights=strategy['mating_modes_distribution'].get())[0]
-    logger.info(f'{crossover_name} crossover between {code1} and {code2}')
-    crossover(code1, code2, strategy['indpb'].get())
+    code1, code2 = inspiration_branch.sample(2, metric='test_quality')['code']
+    code1, code2 = list(code1), list(code2)
+
+    if len(code1) > 1 and len(code2) > 1:
+        crossover_name, crossover = select(list(mating_modes.items()), 
+                                           weights=strategy['mating_modes_distribution'].get())[0]
+        logger.info(f'{crossover_name} crossover between {code1} and {code2}')
+        crossover(code1, code2, strategy['indpb'].get())
 
     codebase = make_dev_codebase()
     codebase.commit(''.join(code1))
@@ -101,10 +106,11 @@ default_strategy = {
 }
 
 class JuniorDeveloper():
-    def __init__(self, strategy=None):
+    def __init__(self, strategy=None, name='junior'):
         if strategy is None:
             strategy = make_chromosome_from_blueprint(default_strategy)
         self.strategy = strategy
+        self.name = name
 
     def write_programs(self, inspiration_branch):
         action_distribution = self.strategy['action_distribution'].get()
