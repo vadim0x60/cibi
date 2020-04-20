@@ -958,25 +958,32 @@ def compute_iw(codebase, replay_alpha):
       Numpy array of shape [batch_size] containing the importance weight for
       each episode in the batch.
     """
-    if len(codebase) == 0:
-      return np.array([])
+    total_replay_weight = sum(codebase['replay_weight'])
+    if total_replay_weight == 0:
+      # This happens when:
+      # - codebase is empty
+      # or
+      # - all replay weights are zero due to floating point limitations 
+      # replay weight are exponents and sometimes exp(minus a lot) is rounded to 0
+      n = len(codebase)
+      return np.ones(n) / n
+    else:
+      log_total_replay_weight = log(total_replay_weight)
 
-    log_total_replay_weight = log(sum(codebase['replay_weight']))
+      # importance weight
+      # = 1 / [(1 - a) + a * exp(log(replay_weight / total_weight / p))]
+      # = 1 / ((1-a) + a*q/p)
+      a = float(replay_alpha)
+      a_com = 1.0 - a  # compliment of a
 
-    # importance weight
-    # = 1 / [(1 - a) + a * exp(log(replay_weight / total_weight / p))]
-    # = 1 / ((1-a) + a*q/p)
-    a = float(replay_alpha)
-    a_com = 1.0 - a  # compliment of a
-
-    importance_weights = np.asarray(
-        [1.0 / (a_com
-                + a * exp((log(replay_weight) - log_total_replay_weight)
-                          - log_p))
-         if replay_weight > 0 else 1.0 / a_com
-         for log_p, replay_weight
-         in zip(codebase['log_prob'], codebase['replay_weight'])])
-    return importance_weights
+      importance_weights = np.asarray(
+          [1.0 / (a_com
+                  + a * exp((log(replay_weight) - log_total_replay_weight)
+                            - log_p))
+          if replay_weight > 0 else 1.0 / a_com
+          for log_p, replay_weight
+          in zip(codebase['log_prob'], codebase['replay_weight'])])
+      return importance_weights
 
 def process_episodes(reinforce_branch, baselines=None):
   """Compute REINFORCE targets.
