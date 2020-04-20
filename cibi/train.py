@@ -16,6 +16,7 @@ def run_experiment(team_id, env_name, scrum_config, logdir, num_repetitions, num
     team = teams[team_id]
     env = gym.make(env_name)
     shortest_episode = float('inf')
+    longest_episode = 0
     max_total_reward = float('-inf')
 
     train_dir = os.path.join(logdir, 'train')
@@ -25,12 +26,15 @@ def run_experiment(team_id, env_name, scrum_config, logdir, num_repetitions, num
         while agent.sprints_elapsed < num_sprints:
             rollout = agent.attend_gym(env, max_reps=None, render=render)
 
-            shortest_episode = min(shortest_episode, len(rollout))
+            episode_length = len(rollout)
+            shortest_episode = min(shortest_episode, episode_length)
+            longest_episode = max(longest_episode, episode_length)
             max_total_reward = max(max_total_reward, rollout.total_reward)
 
             with open(os.path.join(logdir, 'summary.txt'), 'w') as f:
                 summary = str({
                     'shortest_episode': shortest_episode,
+                    'longest_episode': longest_episode,
                     'max_total_reward': max_total_reward
                 })
 
