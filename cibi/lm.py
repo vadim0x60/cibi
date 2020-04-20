@@ -968,21 +968,27 @@ def compute_iw(codebase, replay_alpha):
       n = len(codebase)
       return np.ones(n) / n
     else:
-      log_total_replay_weight = log(total_replay_weight)
+      try:
+        log_total_replay_weight = log(total_replay_weight)
 
-      # importance weight
-      # = 1 / [(1 - a) + a * exp(log(replay_weight / total_weight / p))]
-      # = 1 / ((1-a) + a*q/p)
-      a = float(replay_alpha)
-      a_com = 1.0 - a  # compliment of a
+        # importance weight
+        # = 1 / [(1 - a) + a * exp(log(replay_weight / total_weight / p))]
+        # = 1 / ((1-a) + a*q/p)
+        a = float(replay_alpha)
+        a_com = 1.0 - a  # compliment of a
 
-      importance_weights = np.asarray(
-          [1.0 / (a_com
-                  + a * exp((log(replay_weight) - log_total_replay_weight)
-                            - log_p))
-          if replay_weight > 0 else 1.0 / a_com
-          for log_p, replay_weight
-          in zip(codebase['log_prob'], codebase['replay_weight'])])
+        importance_weights = np.asarray(
+            [1.0 / (a_com
+                    + a * exp((log(replay_weight) - log_total_replay_weight)
+                              - log_p))
+            if replay_weight > 0 else 1.0 / a_com
+            for log_p, replay_weight
+            in zip(codebase['log_prob'], codebase['replay_weight'])])
+      except OverflowError:
+        # This Softmax is too close for the CPU to handle
+        # So it's safe to turn it into just max
+        weights = np.zeros(len(codebase))
+        weights[np.argmax(codebase['replay_weight'])] = 1
       return importance_weights
 
 def process_episodes(reinforce_branch, baselines=None):
