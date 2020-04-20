@@ -10,17 +10,27 @@ import random
 import logging
 logger = logging.getLogger(f'cibi.{__file__}')
 
-cell_actions = ''.join(bf.SHORTHAND_CELLS) + '><'
+pointer_actions = ''.join(bf.SHORTHAND_CELLS) + '><'
+memory_actions = ''.join(bf.SHORTHAND_ACTIONS) + '\+\-'
 
 def select(elements, weights, k=1):
     weights /= np.sum(weights)
     chosen = np.random.choice(len(elements), size=k, replace=False, p=weights)
     return [elements[c] for c in chosen]
 
+def prune_step(code):
+    code = re.sub(r'\+\-|><|\-\+|<>', '', code)
+    code = re.sub(fr'[{pointer_actions}]+(?=[{bf.SHORTHAND_CELLS}])', '', code)
+    code = re.sub(fr'[{memory_actions}]+(?=[{bf.SHORTHAND_ACTIONS}])', '', code)
+    return code
+
 def prune(inspiration_branch, strategy):
-    old_code, _, _ = inspiration_branch.sample(1, metric='test_quality').peek()
-    logger.info(f'pruning {old_code}')
-    new_code = re.sub(f'[{cell_actions}]+(?=[{bf.SHORTHAND_CELLS}])', '', old_code)
+    new_code, _, _ = inspiration_branch.sample(1, metric='test_quality').peek()
+    logger.info(f'pruning {new_code}')
+
+    old_code = None
+    while new_code != old_code:
+        old_code, new_code = new_code, prune_step(new_code)
 
     codebase = make_dev_codebase()
     codebase.commit(new_code)
