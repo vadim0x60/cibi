@@ -958,6 +958,9 @@ def compute_iw(codebase, replay_alpha):
       Numpy array of shape [batch_size] containing the importance weight for
       each episode in the batch.
     """
+    if len(codebase) == 0:
+      return np.array([])
+
     log_total_replay_weight = log(sum(codebase['replay_weight']))
 
     # importance weight
