@@ -4,6 +4,7 @@ import os
 import logging
 import gym
 
+import cibi
 from cibi.utils import get_dir_out_of_the_way
 from cibi.teams import teams
 from cibi.scrum_master import hire_team
@@ -33,6 +34,8 @@ def run_experiment(team_id, env_name, scrum_config, logdir, num_repetitions, num
 
             with open(os.path.join(logdir, 'summary.txt'), 'w') as f:
                 summary = str({
+                    'cibi_version': cibi.__version__,
+                    'scrum_config': scrum_config,
                     'shortest_episode': shortest_episode,
                     'longest_episode': longest_episode,
                     'max_total_reward': max_total_reward
