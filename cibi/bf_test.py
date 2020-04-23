@@ -12,7 +12,7 @@ from cibi.bf import Executable, ProgramFinishedError
 action_space = s.Discrete(1024)
 observation_space = s.Discrete(1024)
 
-observation_discretizer = bf.observation_discretizer(observation_space)
+observation_discretizer = bf.ObservationDiscretizer(observation_space)
 action_sampler = bf.ActionSampler(action_space)
 
 def shorten(seq, size_limit=20, head_size=5, tail_size=5):

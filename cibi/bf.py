@@ -22,6 +22,15 @@ ExecutionSnapshot = namedtuple(
     'ExecutionSnapshot',
     ['codeptr', 'codechar', 'memptr', 'memval', 'memory', 'action_stack', 'state'])
 
+ObservationSnaphot = namedtuple(
+  'InputSnaphot',
+  ['raw_observaton', 'memory_update'])
+
+ActionSnapshot = namedtuple(
+  'ActionSnapshot',
+  ['action_stack', 'raw_action', 'action_taken']
+)
+
 class Result(object):
   SUCCESS = 'success'
   STEP_LIMIT = 'step-limit'
@@ -89,33 +98,53 @@ class ProgramFinishedError(ActionError):
     msg = f'Trying to execute program {code} that has finished with {program_result}'
     super().__init__(msg, program_result)
 
-def observation_discretizer(observation_space, discretization_steps=len(SHORTHAND_CELLS)):
-  if type(observation_space) is s.Discrete:
-    return lambda x: x
-  if type(observation_space) in (s.MultiDiscrete, s.MultiBinary):
-    return lambda x: x.astype(np.int).tolist()
-  elif type(observation_space) == s.Box:
-    both_bounds = observation_space.bounded_below * observation_space.bounded_above
+class ObservationDiscretizer():
+  def __init__(self, observation_space, discretization_steps=len(SHORTHAND_CELLS), debug=False):
+    if type(observation_space) == s.Box:
+      self.both_bounds = observation_space.bounded_below * observation_space.bounded_above
+    elif type(observation_space) not in (s.Discrete, s.MultiDiscrete, s.MultiBinary):
+      raise NotImplementedError('Only Discrete, MultiDiscrete, MultiBinary and Box spaces are supported')
 
-    def discretize(observation):
-      discretized = np.zeros(observation_space.shape)
-      discretized[~both_bounds] = observation[~both_bounds]
-      low = observation_space.low[both_bounds]
-      high = observation_space.high[both_bounds]
-      discretized[both_bounds] = (observation[both_bounds] - low) / (high - low)
-      discretized *= discretization_steps
+    if debug:
+      self.trace = []
+
+    self.observation_space = observation_space
+    self.debug = debug
+    self.discretization_steps = discretization_steps
+
+  def discretize(self, observation):
+    if type(self.observation_space) is s.Discrete:
+      discretized = observation
+    if type(self.observation_space) in (s.MultiDiscrete, s.MultiBinary):
+      discretized = observation.astype(np.int).tolist()
+    elif type(self.observation_space) == s.Box:
+      discretized = np.zeros(self.observation_space.shape)
+      discretized[~self.both_bounds] = observation[~self.both_bounds]
+      low = self.observation_space.low[self.both_bounds]
+      high = self.observation_space.high[self.both_bounds]
+      discretized[self.both_bounds] = (observation[self.both_bounds] - low) / (high - low)
+      discretized *= self.discretization_steps
       discretized = discretized.astype(np.int).tolist()
-      return discretized
-    return discretize   
-  else:
-    raise NotImplementedError('Only Discrete, MultiDiscrete, MultiBinary and Box spaces are supported')
+    
+    if self.debug:
+      self.trace.append(ObservationSnaphot(raw_observaton=observation,
+                                           memory_update=discretized))
+    
+    return discretized
+
+  def __call__(self, observation):
+    return self.discretize(observation)
 
 class ActionSampler:
-  def __init__(self, action_space, discretization_steps=len(SHORTHAND_ACTIONS), default_action=None):
+  def __init__(self, action_space, discretization_steps=len(SHORTHAND_ACTIONS), default_action=None, debug=False):
     space_type = type(action_space)
     self.sample_shape = action_space.shape
     self.discretization_steps = discretization_steps
+    self.debug = debug
     self.just_a_number = False
+
+    if debug:
+      self.trace = []
 
     if space_type == s.Discrete:
       self.lower_bound = np.array([0])
@@ -184,18 +213,27 @@ class ActionSampler:
     sample_size = int(np.prod(self.sample_shape))
 
     # like pop(), but for many elements
-    if len(action_stack) < sample_size:
-      return self.default_action
-    else:
-      sample = action_stack[-sample_size:]
+    raw_action = None
+    action = self.default_action
+
+    if len(action_stack) >= sample_size:
+      raw_action = action_stack[-sample_size:]
       del action_stack[-sample_size:]
 
-      sample = np.array(sample).reshape(self.sample_shape)
-      sample = self.undiscretize(sample)
+      raw_action = np.array(raw_action).reshape(self.sample_shape)
+      action = self.undiscretize(raw_action)
       if self.just_a_number:
-        return int(sample)
-      else:
-        return sample
+        action = int(action)
+    
+    if self.debug:
+      self.trace.append(ActionSnapshot(action_stack=action_stack,
+                                       raw_action=raw_action,
+                                       action_taken=action))
+
+    return action
+
+  def __call__(self, action_stack):
+    return self.sample(action_stack)
     
 class Executable(Agent):
   def __init__(self, code, observation_discretizer, action_sampler,

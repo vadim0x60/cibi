@@ -24,7 +24,7 @@ class ScrumMaster(Agent):
         self.developer_queue = itertools.cycle(developers)
         self.lead_developer = next(self.developer_queue)
         # TODO: config discretization steps
-        self.observation_discretizer = bf.observation_discretizer(env.observation_space)
+        self.observation_discretizer = bf.ObservationDiscretizer(env.observation_space)
         self.action_sampler = bf.ActionSampler(env.action_space)
         self.cycle_programs = cycle_programs
 
