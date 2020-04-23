@@ -368,8 +368,8 @@ class Executable(Agent):
     if command in SHORTHAND_CELLS:
       self.cellptr = SHORTHAND_CELLS.index(command)
 
-    if command == '[' and self.read() == 0: self.codeptr = self.bracemap[self.codeptr]
-    if command == ']' and self.read() != 0: self.codeptr = self.bracemap[self.codeptr]
+    if command == '[' and self.read() <= 0: self.codeptr = self.bracemap[self.codeptr]
+    if command == ']' and self.read() > 0: self.codeptr = self.bracemap[self.codeptr]
 
     if command == '.': self.action_stack.insert(0, self.read())
     if command == '!': self.action_stack.append(self.read())
