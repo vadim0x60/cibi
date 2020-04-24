@@ -9,5 +9,3 @@ This package doesn't perform any war dances (yet), but it can defeat most [OpenA
 - BF++: an extended version of [Brainfuck language](https://en.wikipedia.org/wiki/Brainfuck)
 
 Some code is blatantly copied and pasted from [Google's Brain Coder](https://github.com/tensorflow/models/tree/master/research/brain_coder) which is permitted by [Apache License](LICENSE)
-
-See `experiments` folder for example usage
