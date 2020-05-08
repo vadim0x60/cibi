@@ -17,7 +17,7 @@ def run_episode(env, code, render=False, debug=False):
     if code == 'random':
         executable = RandomAgent(env.action_space)
     else:
-        executable = bf.Executable(code, observation_discretizer, action_sampler, cycle=True)
+        executable = bf.Executable(code, observation_discretizer, action_sampler, cycle=True, debug=debug)
         
     rollout = executable.attend_gym(env, render = render)
 
