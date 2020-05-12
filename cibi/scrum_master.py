@@ -14,7 +14,6 @@ class ScrumMaster(Agent):
     - forcing them to reprogram if the programs don't compile
     - giving them positive and negative reinforcement
     - measuring their performance
-    At the moment, Scrum Master is only able to manage one developer
     """
 
     def __init__(self, developers, env, sprint_length=100, stretch_sprints=True,
