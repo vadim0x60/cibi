@@ -147,6 +147,18 @@ class BfTest(tf.test.TestCase):
          es(codeptr=6, codechar='.', memptr=2, memval=0, memory=[2, 1, 0], action_stack=[0, 1, 2], state='executing')],
         agent.program_trace)
 
+  def testStreamDiscretizer(self):
+    discretize = bf.stream_discretizer([0, 1])
+    self.assertEqual([discretize(x) for x in [-1, 0, 0.5, 1, 1.5]], [0, 1, 1, 2, 2])
+
+  def testFluidStreamDiscretizer(self):
+    discretize = bf.fluid_stream_discretizer(bin_count=3, history_length=2)
+    print(discretize.thresholds)
+    discretize(5)
+    discretize(6)
+    print(discretize.thresholds)
+    self.assertEqual(discretize(5.5), 1)
+
 
 if __name__ == '__main__':
   tf.test.main()

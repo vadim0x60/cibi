@@ -10,11 +10,13 @@ Language info: https://en.wikipedia.org/wiki/Brainfuck
 """
 
 from cibi.agent import Agent, ActionError
+from sortedcollections import ValueSortedDict
 
 from collections import namedtuple
 import gym.spaces as s
 import numpy as np
 import time
+import itertools
 
 from typing import TYPE_CHECKING
 
@@ -98,33 +100,63 @@ class ProgramFinishedError(ActionError):
     msg = f'Trying to execute program {code} that has finished with {program_result}'
     super().__init__(msg, program_result)
 
+def stream_discretizer(thresholds):
+  return lambda value: np.digitize(value, thresholds)
+
+def floor(x):
+  return np.floor(x).astype(int)
+
+class fluid_stream_discretizer():
+  #TODO: Link to paper
+
+  def __init__(self, bin_count=len(SHORTHAND_ACTIONS), history_length=500):
+    self.history = ValueSortedDict()
+    self.step = 0
+    self.thresholds = np.linspace(0, 1, bin_count - 1)
+    self.history_length = history_length
+
+  def __call__(self, value):
+    self.step += 1
+    self.history[self.step] = value
+
+    values = np.array(self.history.values())
+    bin_count = len(self.thresholds) + 1
+    self.thresholds = values[[floor(idx * len(self.history) / bin_count) for idx in range(1, bin_count)]]
+
+    try:
+      del self.history[self.step - self.history_length]
+    except KeyError:
+      pass
+
+    return np.digitize(value, self.thresholds)
+
 class ObservationDiscretizer():
-  def __init__(self, observation_space, discretization_steps=len(SHORTHAND_CELLS), debug=False):
+  def __init__(self, observation_space, thresholds=None, debug=False):
+    thresholds = np.array(thresholds)
+
     if type(observation_space) == s.Box:
-      self.both_bounds = observation_space.bounded_below * observation_space.bounded_above
-    elif type(observation_space) not in (s.Discrete, s.MultiDiscrete, s.MultiBinary):
+      if thresholds:
+        if len(thresholds.shape) == 1:
+          self.discretizers = [stream_discretizer(thresholds) for _ in range(observation_space.shape[0])]
+        else:
+          assert thresholds.shape[:-1] == observation_space.shape
+          self.discretizers = [stream_discretizer(t) for t in thresholds.reshape(-1)]
+      else:
+        self.discretizers = [fluid_stream_discretizer() for _ in range(np.prod(observation_space.shape))]
+    elif type(observation_space) in (s.Discrete, s.MultiDiscrete, s.MultiBinary):
+      self.discretizers = itertools.cycle([lambda x: x])
+    else:
       raise NotImplementedError('Only Discrete, MultiDiscrete, MultiBinary and Box spaces are supported')
 
     if debug:
       self.trace = []
 
-    self.observation_space = observation_space
     self.debug = debug
-    self.discretization_steps = discretization_steps
 
   def discretize(self, observation):
-    if type(self.observation_space) is s.Discrete:
-      discretized = observation
-    if type(self.observation_space) in (s.MultiDiscrete, s.MultiBinary):
-      discretized = observation.astype(np.int).tolist()
-    elif type(self.observation_space) == s.Box:
-      discretized = np.zeros(self.observation_space.shape)
-      discretized[~self.both_bounds] = observation[~self.both_bounds]
-      low = self.observation_space.low[self.both_bounds]
-      high = self.observation_space.high[self.both_bounds]
-      discretized[self.both_bounds] = (observation[self.both_bounds] - low) / (high - low)
-      discretized *= self.discretization_steps
-      discretized = discretized.astype(np.int).tolist()
+    observation = np.array(observation)
+    discretized = [_discretize(feature) for _discretize, feature in zip(self.discretizers, observation.reshape(-1))]
+    discretized = np.array(discretized).reshape(observation.shape)    
     
     if self.debug:
       self.trace.append(ObservationSnaphot(raw_observaton=observation,
