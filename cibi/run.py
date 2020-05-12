@@ -28,8 +28,6 @@ def run_episode(env, code, render=False, debug=False):
         pass
 
     if render:
-        print(f'Observations {rollout.states}')
-        print(f'Actions {rollout.actions}')
         print(f'Total reward {rollout.total_reward}')
 
         if debug:
