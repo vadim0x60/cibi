@@ -10,7 +10,7 @@ Language info: https://en.wikipedia.org/wiki/Brainfuck
 """
 
 from cibi.agent import Agent, ActionError
-from sortedcollections import ValueSortedDict
+from cibi.stream_discretizer import StreamDiscretizer, FluidStreamDiscretizer, DummyStreamDiscretizer
 
 from collections import namedtuple
 import gym.spaces as s
@@ -25,7 +25,7 @@ ExecutionSnapshot = namedtuple(
     ['codeptr', 'codechar', 'memptr', 'memval', 'memory', 'action_stack', 'state'])
 
 ObservationSnaphot = namedtuple(
-  'InputSnaphot',
+  'ObservationSnaphot',
   ['raw_observaton', 'memory_update'])
 
 ActionSnapshot = namedtuple(
@@ -47,7 +47,7 @@ class State(object):
 
 SHORTHAND_ACTIONS = '01234'
 SHORTHAND_CELLS = 'abcde'
-CHARS = '><^+-[].,!' + SHORTHAND_ACTIONS + SHORTHAND_CELLS
+CHARS = '><^+-[].,!~' + SHORTHAND_ACTIONS + SHORTHAND_CELLS
 BF_EOS_INT = 0  # Also used as SOS (start of sequence).
 BF_EOS_CHAR = TEXT_EOS_CHAR = '_'
 BF_INT_TO_CHAR = BF_EOS_CHAR + CHARS
@@ -100,36 +100,6 @@ class ProgramFinishedError(ActionError):
     msg = f'Trying to execute program {code} that has finished with {program_result}'
     super().__init__(msg, program_result)
 
-def stream_discretizer(thresholds):
-  return lambda value: np.digitize(value, thresholds)
-
-def floor(x):
-  return np.floor(x).astype(int)
-
-class fluid_stream_discretizer():
-  #TODO: Link to paper
-
-  def __init__(self, bin_count=len(SHORTHAND_ACTIONS), history_length=500):
-    self.history = ValueSortedDict()
-    self.step = 0
-    self.thresholds = np.linspace(0, 1, bin_count - 1)
-    self.history_length = history_length
-
-  def __call__(self, value):
-    self.step += 1
-    self.history[self.step] = value
-
-    values = np.array(self.history.values())
-    bin_count = len(self.thresholds) + 1
-    self.thresholds = values[[floor(idx * len(self.history) / bin_count) for idx in range(1, bin_count)]]
-
-    try:
-      del self.history[self.step - self.history_length]
-    except KeyError:
-      pass
-
-    return np.digitize(value, self.thresholds)
-
 class ObservationDiscretizer():
   def __init__(self, observation_space, thresholds=None, debug=False):
     thresholds = np.array(thresholds)
@@ -137,16 +107,16 @@ class ObservationDiscretizer():
     if type(observation_space) == s.Box:
       if thresholds:
         if len(thresholds.shape) == 1:
-          self.discretizers = [stream_discretizer(thresholds) for _ in range(observation_space.shape[0])]
+          self.discretizers = [StreamDiscretizer(thresholds) for _ in range(observation_space.shape[0])]
         else:
           assert thresholds.shape[:-1] == observation_space.shape
-          self.discretizers = [stream_discretizer(t) for t in thresholds.reshape(-1)]
+          self.discretizers = [StreamDiscretizer(t) for t in thresholds.reshape(-1)]
       else:
-        self.discretizers = [fluid_stream_discretizer() for _ in range(np.prod(observation_space.shape))]
+        self.discretizers = [FluidStreamDiscretizer(bin_count=len(SHORTHAND_ACTIONS)) for _ in range(np.prod(observation_space.shape))]
     elif type(observation_space) in (s.Discrete, s.MultiDiscrete, s.MultiBinary):
-      self.discretizers = itertools.cycle([lambda x: x])
+      self.discretizers = []
     else:
-      raise NotImplementedError('Only Discrete, MultiDiscrete, MultiBinary and Box spaces are supported')
+      raise NotImplementedError(f'{type(observation_space)} observation spaces not supported')
 
     if debug:
       self.trace = []
@@ -154,15 +124,27 @@ class ObservationDiscretizer():
     self.debug = debug
 
   def discretize(self, observation):
-    observation = np.array(observation)
-    discretized = [_discretize(feature) for _discretize, feature in zip(self.discretizers, observation.reshape(-1))]
-    discretized = np.array(discretized).reshape(observation.shape)    
+    if self.discretizers:
+      observation = np.array(observation)
+      discretized = [_discretize(feature) for _discretize, feature in zip(self.discretizers, observation.reshape(-1))]
+      discretized = np.array(discretized).reshape(observation.shape)    
+    else:
+      discretized = observation
     
     if self.debug:
       self.trace.append(ObservationSnaphot(raw_observaton=observation,
                                            memory_update=discretized))
     
     return discretized
+
+  def get_thresholds(self):
+    return [d.thresholds for d in self.discretizers]
+
+  def is_fluid(self):
+    return any(type(d) == FluidStreamDiscretizer for d in self.discretizers)
+
+  def is_saturated(self):
+    return all(d.saturated for d in self.discretizers)
 
   def __call__(self, observation):
     return self.discretize(observation)
@@ -271,7 +253,7 @@ class Executable(Agent):
   def __init__(self, code, observation_discretizer, action_sampler,
                log_prob=None,
                init_memory=None, null_value=0,
-               max_steps=2 ** 20, require_correct_syntax=True, debug=False,
+               max_steps=2 ** 12, require_correct_syntax=True, debug=False,
                cycle = False):
     self.code = code
     self.log_prob = log_prob
@@ -394,6 +376,11 @@ class Executable(Agent):
       value -= 1
       self.write(value)
 
+    if command == '~':
+      value = self.read()
+      value = -value
+      self.write(value) 
+
     if command in SHORTHAND_ACTIONS:
       self.write(SHORTHAND_ACTIONS.index(command))
 
@@ -430,7 +417,7 @@ class Executable(Agent):
     self.write(self.observation_discretizer(inp))
 
     self.codeptr += 1
-    self.steps += 1
+    self.steps = 0
 
   def act(self):
     action = self.action_sampler.sample(self.action_stack)

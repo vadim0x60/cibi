@@ -148,11 +148,11 @@ class BfTest(tf.test.TestCase):
         agent.program_trace)
 
   def testStreamDiscretizer(self):
-    discretize = bf.stream_discretizer([0, 1])
+    discretize = bf.StreamDiscretizer([0, 1])
     self.assertEqual([discretize(x) for x in [-1, 0, 0.5, 1, 1.5]], [0, 1, 1, 2, 2])
 
   def testFluidStreamDiscretizer(self):
-    discretize = bf.fluid_stream_discretizer(bin_count=3, history_length=2)
+    discretize = bf.FluidStreamDiscretizer(bin_count=3, history_length=2)
     print(discretize.thresholds)
     discretize(5)
     discretize(6)
