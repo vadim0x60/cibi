@@ -10,10 +10,7 @@ class ExecutionError(Exception):
         super().__init__()
         self.result = result
 
-def run_episode(env, code, render=False, debug=False):
-    observation_discretizer = bf.ObservationDiscretizer(env.observation_space, debug=debug)
-    action_sampler = bf.ActionSampler(env.action_space, debug=debug)
-
+def run_episode(env, code, observation_discretizer, action_sampler, render=False, debug=False):
     if code == 'random':
         executable = RandomAgent(env.action_space)
     else:
@@ -27,13 +24,12 @@ def run_episode(env, code, render=False, debug=False):
     except AttributeError:
         pass
 
-    if render:
+    if debug:
+        print(f'Trace: {executable.program_trace}')
+        print(f'Observation trace: {observation_discretizer.trace}')
+        print(f'Discretization thresholds: {observation_discretizer.get_thresholds()}')
+        print(f'Action trace: {action_sampler.trace}')
         print(f'Total reward {rollout.total_reward}')
-
-        if debug:
-            print(f'Trace: {executable.program_trace}')
-            print(f'Observation trace: {observation_discretizer.trace}')
-            print(f'Action trace: {action_sampler.trace}')
     return rollout
 
 def average(coll):
@@ -68,9 +64,22 @@ def run(env_name, input_code, avg, best, input_file, output_file, debug, burn_in
     for line in lines:
         print(line)
         code = line.split(' ')[-1].strip()
+
+        observation_discretizer = bf.ObservationDiscretizer(env.observation_space, debug=debug)
+        action_sampler = bf.ActionSampler(env.action_space, debug=debug)
+
+        if observation_discretizer.is_fluid():
+            if debug:
+                print('Burn in')
+
+            for _ in range(burn_in):
+                run_episode(env, code, observation_discretizer, action_sampler, False, debug)
+
+            if debug:
+                print('Burn in over')
         
         try:
-            average_best_reward = average([max(run_episode(env, code, render, debug).total_reward 
+            average_best_reward = average([max(run_episode(env, code, observation_discretizer, action_sampler, render, debug).total_reward 
                                                for best_idx in range(best)) for avg_idx in range(avg)])
             print(f'Average best reward {average_best_reward}')
             if output_file:
