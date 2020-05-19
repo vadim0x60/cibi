@@ -6,16 +6,17 @@ import gym
 
 import cibi
 from cibi.utils import get_dir_out_of_the_way
+from cibi.utils import parse_config_string
+from cibi.extensions import make_gym
 from cibi.teams import teams
 from cibi.scrum_master import hire_team
-from cibi.utils import parse_config_string
 
 def run_experiment(team_id, env_name, scrum_config, logdir, num_repetitions, num_sprints, render):
     logger = logging.getLogger('cibi')  
     logger.info(env_name)
 
     team = teams[team_id]
-    env = gym.make(env_name)
+    env = make_gym(env_name)
     shortest_episode = float('inf')
     longest_episode = 0
     max_total_reward = float('-inf')

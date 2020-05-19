@@ -1,8 +1,8 @@
 import click
 from cibi import bf
 from cibi.agent import RandomAgent
+from cibi.extensions import make_gym
 from sortedcontainers import SortedDict
-import gym
 import time
 
 class ExecutionError(Exception):
@@ -44,11 +44,12 @@ def average(coll):
 @click.argument('input_code', required=False, type=str)
 @click.option('--avg', help='Average results over multiple runs', type=int, default=1)
 @click.option('--best', help='Take the best result over multiple runs', type=int, default=1)
+@click.option('--burn-in', type=int, default=100, help='Start with several runs with no scoring for calibration')
 @click.option('--input-file', '-i', help='Load the programs from a specified file')
 @click.option('--output-file', '-o', help='Save total rewards to a file')
 @click.option('--debug', is_flag=True, help='Log full execution traces')
-def run(env_name, input_code, avg, best, input_file, output_file, debug):
-    env = gym.make(env_name)
+def run(env_name, input_code, avg, best, input_file, output_file, debug, burn_in):
+    env = make_gym(env_name)
 
     if input_code:
         lines = [input_code]
