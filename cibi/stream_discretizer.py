@@ -25,7 +25,7 @@ class DummyStreamDiscretizer():
     return value
 
 class FluidStreamDiscretizer():
-  def __init__(self, bin_count, history_length=1024):
+  def __init__(self, bin_count, history_length):
     self.history = ValueSortedDict()
     self.step = 0
     self.thresholds = np.linspace(0, 1, bin_count - 1)

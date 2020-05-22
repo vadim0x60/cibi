@@ -101,22 +101,43 @@ class ProgramFinishedError(ActionError):
     super().__init__(msg, program_result)
 
 class ObservationDiscretizer():
-  def __init__(self, observation_space, thresholds=None, debug=False):
+  def __init__(self, observation_space, history_length, thresholds=None, debug=False, force_fluid=False):
     thresholds = np.array(thresholds)
 
     if type(observation_space) == s.Box:
       if thresholds:
         if len(thresholds.shape) == 1:
-          self.discretizers = [StreamDiscretizer(thresholds) for _ in range(observation_space.shape[0])]
+          self.discretizers = [StreamDiscretizer(thresholds) 
+                               for _ in range(observation_space.shape[0])]
         else:
           assert thresholds.shape[:-1] == observation_space.shape
           self.discretizers = [StreamDiscretizer(t) for t in thresholds.reshape(-1)]
       else:
-        self.discretizers = [FluidStreamDiscretizer(bin_count=len(SHORTHAND_ACTIONS)) for _ in range(np.prod(observation_space.shape))]
+        self.discretizers = []
+
+        lower_bounds = observation_space.low.reshape(-1)
+        upper_bounds = observation_space.high.reshape(-1)
+
+        for lower_bound, upper_bound in zip(lower_bounds, upper_bounds):
+          # Observation space object has bounded_below and bounded_above
+          # attributes, but those are unreliable and in many environments
+          # just always set to True
+          bounded_below = (lower_bound > float('-3.4e+38'))
+          bounded_above = (upper_bound < float('3.4e+38'))
+
+          if (not force_fluid) and bounded_below and bounded_above:
+            thresholds = np.linspace(lower_bound, upper_bound, num=DEFAULT_STEPS+1)[1:-1]
+            discretizer = StreamDiscretizer(thresholds)
+          else:
+            discretizer = FluidStreamDiscretizer(bin_count=DEFAULT_STEPS, 
+                                                 history_length=history_length) 
+
+          self.discretizers.append(discretizer)            
     elif type(observation_space) in (s.Discrete, s.MultiDiscrete, s.MultiBinary):
       self.discretizers = []
     else:
-      raise NotImplementedError(f'{type(observation_space)} observation spaces not supported')
+      msg = f'{type(observation_space)} observation spaces not supported'
+      raise NotImplementedError(msg)
 
     if debug:
       self.trace = []

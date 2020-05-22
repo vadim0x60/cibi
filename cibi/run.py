@@ -27,7 +27,6 @@ def run_episode(env, code, observation_discretizer, action_sampler, render=False
     if debug:
         print(f'Trace: {executable.program_trace}')
         print(f'Observation trace: {observation_discretizer.trace}')
-        print(f'Discretization thresholds: {observation_discretizer.get_thresholds()}')
         print(f'Action trace: {action_sampler.trace}')
         print(f'Total reward {rollout.total_reward}')
     return rollout
@@ -40,11 +39,13 @@ def average(coll):
 @click.argument('input_code', required=False, type=str)
 @click.option('--avg', help='Average results over multiple runs', type=int, default=1)
 @click.option('--best', help='Take the best result over multiple runs', type=int, default=1)
-@click.option('--burn-in', type=int, default=100, help='Start with several runs with no scoring for calibration')
+@click.option('--force-fluid-discretization', help='Use fluid discretization even if an observation has lower and upper bounds defined', is_flag=True)
+@click.option('--fluid-discretization-history', help='Length of the observation history kept for fluid discretization', type=int, default=1024)
 @click.option('--input-file', '-i', help='Load the programs from a specified file')
 @click.option('--output-file', '-o', help='Save total rewards to a file')
 @click.option('--debug', is_flag=True, help='Log full execution traces')
-def run(env_name, input_code, avg, best, input_file, output_file, debug, burn_in):
+def run(env_name, input_code, avg, best, input_file, output_file, 
+        debug, force_fluid_discretization, fluid_discretization_history):
     env = make_gym(env_name)
 
     if input_code:
@@ -65,18 +66,25 @@ def run(env_name, input_code, avg, best, input_file, output_file, debug, burn_in
         print(line)
         code = line.split(' ')[-1].strip()
 
-        observation_discretizer = bf.ObservationDiscretizer(env.observation_space, debug=debug)
+        observation_discretizer = bf.ObservationDiscretizer(env.observation_space, debug=debug, 
+                                                            force_fluid=force_fluid_discretization,
+                                                            history_length=fluid_discretization_history)
         action_sampler = bf.ActionSampler(env.action_space, debug=debug)
 
         if observation_discretizer.is_fluid():
             if debug:
                 print('Burn in')
 
-            for _ in range(burn_in):
-                run_episode(env, code, observation_discretizer, action_sampler, False, debug)
+            episode_count = 0
+            while not observation_discretizer.is_saturated():
+                run_episode(env, '@!', observation_discretizer, action_sampler, False, False)
+                episode_count += 1
 
             if debug:
-                print('Burn in over')
+                print(f'{episode_count} episodes of burn in done')
+
+        if debug:
+            print(f'Discretization thresholds: {observation_discretizer.get_thresholds()}')
         
         try:
             average_best_reward = average([max(run_episode(env, code, observation_discretizer, action_sampler, render, debug).total_reward 
