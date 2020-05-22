@@ -77,6 +77,8 @@ def run(env_name, input_code, avg, best, input_file, output_file,
                 episode_count += 1
 
             if debug:
+                observation_discretizer.trace = []
+                action_sampler.trace = []
                 print(f'{episode_count} episodes of burn in done')
 
         if debug:
