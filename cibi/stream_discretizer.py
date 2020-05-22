@@ -47,3 +47,16 @@ class FluidStreamDiscretizer():
       pass
 
     return np.digitize(value, self.thresholds)
+
+def burn_in(env, agent, observation_discretizer, action_sampler):
+  if observation_discretizer.is_fluid():
+    episode_count = 0
+    while not observation_discretizer.is_saturated():
+        agent.attend_gym(env, render=False)
+        episode_count += 1
+
+    if observation_discretizer.debug:
+        observation_discretizer.trace = []
+    if action_sampler.debug:
+        action_sampler.trace = []
+  return episode_count

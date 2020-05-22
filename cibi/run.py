@@ -1,6 +1,7 @@
 import click
 from cibi import bf
 from cibi.extensions import make_gym
+from cibi.stream_discretizer import burn_in
 from sortedcontainers import SortedDict
 import time
 
@@ -67,19 +68,9 @@ def run(env_name, input_code, avg, best, input_file, output_file,
                                                             history_length=fluid_discretization_history)
         action_sampler = bf.ActionSampler(env.action_space, debug=debug)
 
-        if observation_discretizer.is_fluid():
-            if debug:
-                print('Burn in')
-
-            episode_count = 0
-            while not observation_discretizer.is_saturated():
-                run_episode(env, '@!', observation_discretizer, action_sampler, False, False)
-                episode_count += 1
-
-            if debug:
-                observation_discretizer.trace = []
-                action_sampler.trace = []
-                print(f'{episode_count} episodes of burn in done')
+        random_agent = bf.Executable('@!', observation_discretizer, action_sampler, cycle=True, debug=False)
+        episode_count = burn_in(env, random_agent, observation_discretizer, action_sampler)
+        print(f'{episode_count} episodes of burn in done')
 
         if debug:
             print(f'Discretization thresholds: {observation_discretizer.get_thresholds()}')

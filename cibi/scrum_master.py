@@ -16,15 +16,16 @@ class ScrumMaster(Agent):
     - measuring their performance
     """
 
-    def __init__(self, developers, env, sprint_length=100, stretch_sprints=True,
+    def __init__(self, developers, env, 
+                 observation_discretizer, action_sampler,
+                 sprint_length=100, stretch_sprints=True,
                  cycle_programs=True, syntax_error_reward=0, replay_temperature=1,
                  program_file=None):
         self.developers = developers
         self.developer_queue = itertools.cycle(developers)
         self.lead_developer = next(self.developer_queue)
-        # TODO: config discretization steps
-        self.observation_discretizer = bf.ObservationDiscretizer(env.observation_space)
-        self.action_sampler = bf.ActionSampler(env.action_space)
+        self.observation_discretizer = observation_discretizer
+        self.action_sampler = action_sampler
         self.cycle_programs = cycle_programs
 
         self.syntax_error_reward = syntax_error_reward
@@ -153,9 +154,10 @@ class ScrumMaster(Agent):
         self.sprint_ttl = self.sprint_length
         self.sprints_elapsed += 1
 
-def hire_team(developers, env, log_dir, events_dir, scrum_master_args):
+def hire_team(developers, env, observation_discretizer, action_sampler, 
+              log_dir, events_dir, scrum_master_args):
     employees = [dev.hire(log_dir, events_dir) 
                  for dev in developers]
-    manager = ScrumMaster(employees, env,
+    manager = ScrumMaster(employees, env, observation_discretizer, action_sampler,
                           **scrum_master_args)
     return manager
