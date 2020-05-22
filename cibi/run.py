@@ -1,6 +1,5 @@
 import click
 from cibi import bf
-from cibi.agent import RandomAgent
 from cibi.extensions import make_gym
 from sortedcontainers import SortedDict
 import time
@@ -11,10 +10,7 @@ class ExecutionError(Exception):
         self.result = result
 
 def run_episode(env, code, observation_discretizer, action_sampler, render=False, debug=False):
-    if code == 'random':
-        executable = RandomAgent(env.action_space)
-    else:
-        executable = bf.Executable(code, observation_discretizer, action_sampler, cycle=True, debug=debug)
+    executable = bf.Executable(code, observation_discretizer, action_sampler, cycle=True, debug=debug)
         
     rollout = executable.attend_gym(env, render = render)
 

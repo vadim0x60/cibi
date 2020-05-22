@@ -47,7 +47,8 @@ class State(object):
 
 SHORTHAND_ACTIONS = '01234'
 SHORTHAND_CELLS = 'abcde'
-CHARS = '><^+-[].,!~' + SHORTHAND_ACTIONS + SHORTHAND_CELLS
+DEFAULT_STEPS = 5
+CHARS = '@><^+-[].,!~' + SHORTHAND_ACTIONS + SHORTHAND_CELLS
 BF_EOS_INT = 0  # Also used as SOS (start of sequence).
 BF_EOS_CHAR = TEXT_EOS_CHAR = '_'
 BF_INT_TO_CHAR = BF_EOS_CHAR + CHARS
@@ -171,7 +172,7 @@ class ObservationDiscretizer():
     return self.discretize(observation)
 
 class ActionSampler:
-  def __init__(self, action_space, discretization_steps=len(SHORTHAND_ACTIONS), default_action=None, debug=False):
+  def __init__(self, action_space, discretization_steps=DEFAULT_STEPS, default_action=None, debug=False):
     space_type = type(action_space)
     self.sample_shape = action_space.shape
     self.discretization_steps = discretization_steps
@@ -401,6 +402,9 @@ class Executable(Agent):
       value = self.read()
       value = -value
       self.write(value) 
+
+    if command == '@':
+      self.write(np.random.randint(DEFAULT_STEPS))
 
     if command in SHORTHAND_ACTIONS:
       self.write(SHORTHAND_ACTIONS.index(command))
