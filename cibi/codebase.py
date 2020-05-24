@@ -185,9 +185,3 @@ def make_codebase_like(other_codebase):
                  metadata=other_codebase.metadata,
                  deduplication=other_codebase.deduplication)
     return c
-
-if __name__ == '__main__':
-    codebase = Codebase()
-    codebase.commit('1>2!')
-    print(codebase.sample(1).data_frame)
-    codebase.clear()
