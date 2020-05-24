@@ -80,6 +80,8 @@ class Codebase():
                         program_row[metadata_column] = metadata[metadata_column]
                     except KeyError:
                         pass
+
+                self.data_frame.loc[code] = program_row
             except KeyError:
                 append_row(count)
         else:    
