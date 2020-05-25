@@ -68,8 +68,13 @@ class Codebase():
                 for metric in self.metrics:
                     try:
                         # We store mean metrics over all occurences of the program
-                        program_row[metric] = ((program_row[metric] * program_count + metrics[metric]) 
-                                            / (program_count + count))
+                        old_metric = program_row[metric]
+                        metric_update = metrics[metric]
+                        if old_metric != old_metric:
+                            program_row[metric] = metric_update
+                        else:
+                            program_row[metric] = ((old_metric * program_count + metric_update) 
+                                                / (program_count + count))
                     except KeyError:
                         pass
                 program_row['count'] = program_count + count
@@ -176,6 +181,10 @@ class Codebase():
         r = self.peek()
         self.data_frame = self.data_frame.iloc[1:]
         return r
+
+    def to_string(self):
+        # https://stackoverflow.com/questions/55755695/python-3-6-logger-to-log-pandas-dataframe-how-to-indent-the-entire-dataframe/55770434
+        return '\t'+ self.data_frame.to_string().replace('\n', '\n\t') 
 
     def flush(self):
         if self.save_file:
