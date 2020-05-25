@@ -43,7 +43,9 @@ class ScrumMaster(Agent):
                                                  save_file=program_file)
 
         if seed_codebase:
-            self.dev_branch.merge(seed_codebase)
+            seed_codebase['replay_weight'] = np.exp(np.array(seed_codebase['test_quality']) 
+                                                    / self.replay_temperature)
+            self.archive_branch.merge(seed_codebase)
 
         self.prod_program = None
         self.prod_rewards = []
@@ -64,12 +66,12 @@ class ScrumMaster(Agent):
             metrics = {
                 'test_quality': q,
                 'replay_weight': exp(q / self.replay_temperature),
-                'log_prob': self.prod_program.log_prob,
-                'author': self.lead_developer.name
+                'log_prob': self.prod_program.log_prob
             }
 
             metadata = {
-                'result': self.prod_program.result
+                'result': self.prod_program.result,
+                'author': self.lead_developer.name
             }
 
             self.feedback_branch.commit(self.prod_program.code, 
@@ -159,9 +161,12 @@ class ScrumMaster(Agent):
         self.sprints_elapsed += 1
 
 def hire_team(developers, env, observation_discretizer, action_sampler, 
-              log_dir, events_dir, scrum_master_args):
+              log_dir, events_dir, scrum_master_args, 
+              seed_codebase=None):
     employees = [dev.hire(log_dir, events_dir) 
                  for dev in developers]
-    manager = ScrumMaster(employees, env, observation_discretizer, action_sampler,
+    manager = ScrumMaster(employees, env, 
+                          observation_discretizer, action_sampler,
+                          seed_codebase,
                           **scrum_master_args)
     return manager
