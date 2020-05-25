@@ -13,6 +13,15 @@ from cibi.teams import teams
 from cibi.scrum_master import hire_team
 from cibi.stream_discretizer import burn_in
 
+def ensure_enough_test_runs(codebase, env, observation_discretizer, action_sampler, runs=100, render=False):
+    assert codebase.deduplication
+
+    for code, count in zip(codebase['code'], codebase['count']):
+        program = bf.Executable(code, observation_discretizer, action_sampler, cycle=True, debug=False)
+        for _ in range(runs - count):
+            rollout = program.attend_gym(env, render=render)
+            codebase.commit(code, metrics={'test_quality': rollout.total_reward})
+
 def run_experiment(team_id, env_name, scrum_config, logdir, num_repetitions, num_sprints, render, 
                    force_fluid_discretization, fluid_discretization_history):
     logger = logging.getLogger('cibi')  
@@ -56,6 +65,10 @@ def run_experiment(team_id, env_name, scrum_config, logdir, num_repetitions, num
 
                 f.write(summary)
         logger.info(f'Summary: {summary}')
+        
+        top_candidates = agent.archive_branch.top_k('test_quality', 256)
+        ensure_enough_test_runs(top_candidates, env, observation_discretizer, action_sampler)
+        top_candidates.data_frame.to_pickle(os.path.join(logdir, 'top.pickle'))
         
 @click.command()
 @click.argument('team-id', type=int)

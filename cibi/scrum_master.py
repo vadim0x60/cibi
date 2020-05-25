@@ -18,6 +18,7 @@ class ScrumMaster(Agent):
 
     def __init__(self, developers, env, 
                  observation_discretizer, action_sampler,
+                 seed_codebase = None,
                  sprint_length=100, stretch_sprints=True,
                  cycle_programs=True, syntax_error_reward=0, replay_temperature=1,
                  program_file=None):
@@ -40,6 +41,9 @@ class ScrumMaster(Agent):
         self.feedback_branch = make_prod_codebase(deduplication=False)
         self.archive_branch = make_prod_codebase(deduplication=True, 
                                                  save_file=program_file)
+
+        if seed_codebase:
+            self.dev_branch.merge(seed_codebase)
 
         self.prod_program = None
         self.prod_rewards = []
