@@ -101,9 +101,15 @@ class Codebase():
         for _, row in other_codebase.data_frame.iterrows():
             metrics = {metric: row[metric] for metric in self.metrics}
             metadata = {meta: row[meta] for meta in self.metadata}
-            self.commit(row['code'], metrics=metrics, 
-                                     metadata=metadata, 
-                                     count=row['count'])
+            if self.deduplication:
+                self.commit(row['code'], metrics=metrics, 
+                                         metadata=metadata, 
+                                         count=row['count'])
+            else:
+                for _ in range(row['count']):
+                    self.commit(row['code'], metrics=metrics, 
+                                             metadata=metadata, 
+                                             count = 1)
 
     def replace(self, other_codebase):
         assert self.metrics == other_codebase.metrics
@@ -137,7 +143,7 @@ class Codebase():
     def clear(self):
         self.data_frame = self.data_frame.iloc[0:0]
 
-    def sample(self, n=1, metric=None):
+    def sample(self, n=1, metric=None, keep_count=False):
         sampled_data_frame = None
 
         if metric:
@@ -151,6 +157,11 @@ class Codebase():
 
         sampled_codebase = make_codebase_like(self)
         sampled_codebase.data_frame = sampled_data_frame
+        sampled_codebase.deduplication = True
+
+        if not keep_count:
+            sampled_codebase['count'] = 1
+
         return sampled_codebase
 
     def peek(self):
