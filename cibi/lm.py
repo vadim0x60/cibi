@@ -749,7 +749,7 @@ class LanguageModel:
       # sampling.
 
       # Sample from experince replay buffer
-      empty_replay_buffer = len(self.inspiration_branch) == 0
+      empty_replay_buffer = len(self.inspiration_branch) < self.num_replay_per_batch
       num_programs_from_replay_buff = (
           self.num_replay_per_batch if not empty_replay_buffer else 0)
       num_programs_from_policy = (
