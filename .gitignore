@@ -110,3 +110,7 @@ dmypy.json
 
 #logdir
 log
+
+# I tend to use jupyter notebooks as a non-archival temporary way to test ideas
+*.ipynb
+.ipynb_checkpoints
