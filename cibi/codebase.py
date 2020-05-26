@@ -43,8 +43,8 @@ class Codebase():
         try:
             assert self.save_file
             self.data_frame = pd.read_pickle(save_file)
-            assert self.data_frame.columns == columns
-            assert self.data_frame.dtypes == types
+            assert list(self.data_frame.columns) == columns
+            assert list(self.data_frame.dtypes) == types
         except (FileNotFoundError, AssertionError):
             self.data_frame = make_dataframe(columns=columns, 
                                              dtypes=types, 
