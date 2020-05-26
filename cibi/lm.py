@@ -984,12 +984,13 @@ def compute_iw(codebase, replay_alpha):
             if replay_weight > 0 else 1.0 / a_com
             for log_p, replay_weight
             in zip(codebase['log_prob'], codebase['replay_weight'])])
+        return importance_weights
       except OverflowError:
         # This Softmax is too close for the CPU to handle
         # So it's safe to turn it into just max
-        weights = np.zeros(len(codebase))
-        weights[np.argmax(codebase['replay_weight'])] = 1
-      return importance_weights
+        importance_weights = np.zeros(len(codebase))
+        importance_weights[np.argmax(codebase['replay_weight'])] = 1
+        return importance_weights
 
 def process_episodes(reinforce_branch, baselines=None):
   """Compute REINFORCE targets.
