@@ -19,7 +19,7 @@ def ensure_enough_test_runs(codebase, env, observation_discretizer, action_sampl
     assert codebase.deduplication
 
     for code, count, result in zip(codebase['code'], codebase['count'], codebase['result']):
-        if result == 'syntax-error':
+        if result == 'syntax-error' or 'step-limit':
             continue
 
         program = bf.Executable(code, observation_discretizer, action_sampler, cycle=True, debug=False)
@@ -47,8 +47,8 @@ def make_seed_codebase(seed_file, env, observation_discretizer, action_sampler, 
 
     return seed_codebase
 
-def run_experiment(team_id, env_name, scrum_config, logdir, num_repetitions, num_sprints, render, 
-                   seed, force_fluid_discretization, fluid_discretization_history):
+def run_experiment(team_id, env_name, scrum_config, logdir, num_repetitions, num_sprints, max_failed_sprints,
+                   render, seed, force_fluid_discretization, fluid_discretization_history):
     logging.basicConfig(format='%(asctime)s %(message)s')
     logger = logging.getLogger('cibi')
     logger.info(env_name)
@@ -72,27 +72,38 @@ def run_experiment(team_id, env_name, scrum_config, logdir, num_repetitions, num
     burn_in(env, random_agent, observation_discretizer, action_sampler)
     seed_codebase = make_seed_codebase(seed, env, observation_discretizer, action_sampler, logger)
 
+    failed_sprints = 0
     with hire_team(team, env, observation_discretizer, action_sampler,
-                   train_dir, events_dir, scrum_config, seed_codebase) as agent:
+                   train_dir, events_dir, scrum_config, seed_codebase) as agent:    
         while agent.sprints_elapsed < num_sprints:
-            rollout = agent.attend_gym(env, max_reps=None, render=render)
+            try:
+                rollout = agent.attend_gym(env, max_reps=None, render=render)
 
-            episode_length = len(rollout)
-            shortest_episode = min(shortest_episode, episode_length)
-            longest_episode = max(longest_episode, episode_length)
-            max_total_reward = max(max_total_reward, rollout.total_reward)
+                episode_length = len(rollout)
+                shortest_episode = min(shortest_episode, episode_length)
+                longest_episode = max(longest_episode, episode_length)
+                max_total_reward = max(max_total_reward, rollout.total_reward)
 
-            with open(os.path.join(logdir, 'summary.txt'), 'w') as f:
-                summary = str({
-                    'cibi_version': cibi.__version__,
-                    'scrum_config': scrum_config,
-                    'shortest_episode': shortest_episode,
-                    'longest_episode': longest_episode,
-                    'max_total_reward': max_total_reward,
-                    'seconds_elapsed': time.monotonic() - start_time
-                })
+                with open(os.path.join(logdir, 'summary.txt'), 'w') as f:
+                    summary = str({
+                        'cibi_version': cibi.__version__,
+                        'scrum_config': scrum_config,
+                        'shortest_episode': shortest_episode,
+                        'longest_episode': longest_episode,
+                        'max_total_reward': max_total_reward,
+                        'seconds_elapsed': time.monotonic() - start_time
+                    })
 
-                f.write(summary)
+                    f.write(summary)
+
+                failed_sprints = 0
+            except Exception as e:
+                logger.error(e)
+                failed_sprints += 1
+                if failed_sprints > max_failed_sprints:
+                    logger.error('Tolerance for failed sprints exceeded')
+                    break
+
         logger.info(f'Summary: {summary}')
         
         top_candidates = agent.archive_branch.top_k('test_quality', 256)
@@ -103,6 +114,7 @@ def run_experiment(team_id, env_name, scrum_config, logdir, num_repetitions, num
 @click.argument('team-id', type=int)
 @click.argument('env', type=str)
 @click.option('--num-sprints', default=1024, type=int, help='Training length in sprints')
+@click.option('--max-failed-sprints', help='Stop training after this many consecutive sprints', type=int, default=3)
 @click.option('--scrum-config', default='', type=str, help='Scrum configuration')
 @click.option('--logdir', default='log/exp', type=str, help='Absolute path where to write results.')
 @click.option('--num-repetitions', default=1, type=int, help='Number of times the same experiment will be run (globally across all workers). Each run is independent.')
@@ -111,7 +123,8 @@ def run_experiment(team_id, env_name, scrum_config, logdir, num_repetitions, num
 @click.option('--seed', '-s', type=str, help='A pre-written codebase to start from')
 @click.option('--force-fluid-discretization', help='Use fluid discretization even if an observation has lower and upper bounds defined', is_flag=True)
 @click.option('--fluid-discretization-history', help='Length of the observation history kept for fluid discretization', type=int, default=1024)
-def run_experiments(team_id, env, num_sprints, scrum_config, logdir, 
+def run_experiments(team_id, env, num_sprints, max_failed_sprints, 
+                    scrum_config, logdir, 
                     force_fluid_discretization, fluid_discretization_history,
                     num_repetitions, log_level, seed, render):
     scrum_config = parse_config_string(scrum_config)
@@ -134,7 +147,7 @@ def run_experiments(team_id, env, num_sprints, scrum_config, logdir,
         parent_logger.addHandler(logging.FileHandler(f'{experiment_dir}/log.log'))
 
         run_experiment(team_id, env, scrum_config, experiment_dir, 
-                       num_repetitions, num_sprints, render, seed,
+                       num_repetitions, num_sprints, max_failed_sprints, render, seed,
                        force_fluid_discretization, fluid_discretization_history)
 
 if __name__ == '__main__':
