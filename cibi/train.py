@@ -17,7 +17,10 @@ from cibi.stream_discretizer import burn_in
 def ensure_enough_test_runs(codebase, env, observation_discretizer, action_sampler, runs=100, render=False):
     assert codebase.deduplication
 
-    for code, count in zip(codebase['code'], codebase['count']):
+    for code, count, result in zip(codebase['code'], codebase['count'], codebase['result']):
+        if result == 'syntax-error':
+            continue
+
         program = bf.Executable(code, observation_discretizer, action_sampler, cycle=True, debug=False)
         for _ in range(runs - count):
             rollout = program.attend_gym(env, render=render)
