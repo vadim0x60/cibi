@@ -66,7 +66,7 @@ default_config = {
   # Uniformly sample this many episodes from topk buffer per batch.
   # If topk is 0, this has no effect.
   'topk_batch_size':1,
-  'timestep_limit': 256,
+  'timestep_limit': 1024,
   # Exponential moving average baseline for REINFORCE.
   # If zero, A2C is used.
   # If non-zero, should be close to 1, like .99, .999, etc.
