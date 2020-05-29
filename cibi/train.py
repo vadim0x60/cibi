@@ -3,6 +3,7 @@ import inspect
 import os
 import logging
 import gym
+import time
 
 import cibi
 from cibi import bf
@@ -48,8 +49,10 @@ def make_seed_codebase(seed_file, env, observation_discretizer, action_sampler, 
 
 def run_experiment(team_id, env_name, scrum_config, logdir, num_repetitions, num_sprints, render, 
                    seed, force_fluid_discretization, fluid_discretization_history):
-    logger = logging.getLogger('cibi')  
+    logging.basicConfig(format='%(asctime)s %(message)s')
+    logger = logging.getLogger('cibi')
     logger.info(env_name)
+    start_time = time.monotonic()
 
     team = teams[team_id]
     env = make_gym(env_name)
@@ -85,7 +88,8 @@ def run_experiment(team_id, env_name, scrum_config, logdir, num_repetitions, num
                     'scrum_config': scrum_config,
                     'shortest_episode': shortest_episode,
                     'longest_episode': longest_episode,
-                    'max_total_reward': max_total_reward
+                    'max_total_reward': max_total_reward,
+                    'seconds_elapsed': time.monotonic() - start_time
                 })
 
                 f.write(summary)
