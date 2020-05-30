@@ -4,6 +4,7 @@ import os
 import logging
 import gym
 import time
+import yaml
 
 import cibi
 from cibi import bf
@@ -47,56 +48,83 @@ def make_seed_codebase(seed_file, env, observation_discretizer, action_sampler, 
 
     return seed_codebase
 
-def run_experiment(team_id, env_name, scrum_config, logdir, num_repetitions, num_sprints, 
-                   max_failed_sprints, allowed_commands, render, seed, 
-                   force_fluid_discretization, fluid_discretization_history):
+@click.command()
+@click.argument('logdir', type=str)
+def run_experiments(logdir):
+    with open(os.path.join(logdir, 'experiment.yml'), 'r') as f:
+        config = yaml.load(f)
+
+    render = config.get('render', False)
+    discretization_config = config.get('discretization', {})
+    scrum_config = config.get('scrum', {})
+    max_failed_sprints = config.get('max_failed_sprints', 3)
+    os.makedirs(logdir, exist_ok=True)
+
+    scrum_config['program_file'] = os.path.join(logdir, 'programs.pickle')
+
     logging.basicConfig(format='%(asctime)s %(message)s')
     logger = logging.getLogger('cibi')
-    logger.info(env_name)
+    logger.setLevel(config.get('log_level', 'INFO'))
+    logger.addHandler(logging.FileHandler(f'{logdir}/log.log'))
+    logger.info(config['env'])
     start_time = time.monotonic()
 
-    team = teams[team_id]
-    env = make_gym(env_name)
-    shortest_episode = float('inf')
-    longest_episode = 0
-    max_total_reward = float('-inf')
+    team = teams[config['team']]
+    env = make_gym(config['env'])
+
+    seed = config.get('seed')
+    if seed:
+        predefined_path = os.path.split(os.path.realpath(__file__))
+        predefined_path = os.path.join(*(predefined_path[:-2] 
+                                       + ('codebases', config['seed'])))
+        custom_path = os.path.realpath(config['seed'])
+        seed = predefined_path if os.path.isfile(predefined_path) else custom_path
+        logger.info(f'Taking programs from {seed} as gospel')
+
+    try:
+        with open(os.path.join(logdir, 'summary.yml'), 'r') as f:
+            summary = yaml.load(f)
+    except FileNotFoundError as e:
+        summary = {
+            'shortest_episode': float('inf'),
+            'longest_episode': 0,
+            'max_total_reward': float('-inf')
+        }
+    summary['cibi_version'] = cibi.__version__
+    try:
+        scrum_config['sprints_elapsed'] = summary['sprints_elapsed']
+    except KeyError:
+        pass
 
     train_dir = os.path.join(logdir, 'train')
     events_dir = os.path.join(logdir, 'events')
 
     observation_discretizer = bf.ObservationDiscretizer(env.observation_space, 
-                                                        history_length=fluid_discretization_history,
-                                                        force_fluid=force_fluid_discretization)
+                                                        history_length=discretization_config.get('history', 1024),
+                                                        force_fluid=discretization_config.get('force-history', False))
     action_sampler = bf.ActionSampler(env.action_space)
-    language = bf.make_bf_plus(allowed_commands if allowed_commands else bf.DEFAULT_CMD_SET)
+    language = bf.make_bf_plus(config.get('allowed-commands', bf.DEFAULT_CMD_SET))
 
     random_agent = bf.Executable('@!', observation_discretizer, action_sampler, cycle=True, debug=False)
     burn_in(env, random_agent, observation_discretizer, action_sampler)
     seed_codebase = make_seed_codebase(seed, env, observation_discretizer, action_sampler, logger)
 
+    failed_sprints = 0
     with hire_team(team, env, observation_discretizer, action_sampler, language,
-                   train_dir, events_dir, scrum_config, seed_codebase) as agent:
-        while agent.sprints_elapsed < num_sprints:
+                train_dir, events_dir, scrum_config, seed_codebase) as agent:
+        while agent.sprints_elapsed < config['num-sprints']:
             try:
                 rollout = agent.attend_gym(env, max_reps=None, render=render)
 
                 episode_length = len(rollout)
-                shortest_episode = min(shortest_episode, episode_length)
-                longest_episode = max(longest_episode, episode_length)
-                max_total_reward = max(max_total_reward, rollout.total_reward)
+                summary['shortest_episode'] = min(summary['shortest_episode'], episode_length)
+                summary['longest_episode'] = max(summary['longest_episode'], episode_length)
+                summary['max_total_reward'] = max(summary['max_total_reward'], rollout.total_reward)
+                summary['sprints_elapsed'] = agent.sprints_elapsed
+                summary['seconds_elapsed'] = time.monotonic() - start_time
 
-                with open(os.path.join(logdir, 'summary.txt'), 'w') as f:
-                    summary = str({
-                        'cibi_version': cibi.__version__,
-                        'scrum_config': scrum_config,
-                        'allowed_commands': allowed_commands,
-                        'shortest_episode': shortest_episode,
-                        'longest_episode': longest_episode,
-                        'max_total_reward': max_total_reward,
-                        'seconds_elapsed': time.monotonic() - start_time
-                    })
-
-                    f.write(summary)
+                with open(os.path.join(logdir, 'summary.yml'), 'w') as f:
+                    yaml.dump(summary, f)
 
                 failed_sprints = 0
             except Exception as e:
@@ -111,46 +139,6 @@ def run_experiment(team_id, env_name, scrum_config, logdir, num_repetitions, num
         top_candidates = agent.archive_branch.top_k('test_quality', 256)
         ensure_enough_test_runs(top_candidates, env, observation_discretizer, action_sampler)
         top_candidates.data_frame.to_pickle(os.path.join(logdir, 'top.pickle'))
-        
-@click.command()
-@click.argument('team-id', type=int)
-@click.argument('env', type=str)
-@click.option('--num-sprints', default=1024, type=int, help='Training length in sprints')
-@click.option('--max-failed-sprints', help='Stop training after this many consecutive sprints', type=int, default=3)
-@click.option('--scrum-config', default='', type=str, help='Scrum configuration')
-@click.option('--logdir', default='log/exp', type=str, help='Absolute path where to write results.')
-@click.option('--num-repetitions', default=1, type=int, help='Number of times the same experiment will be run (globally across all workers). Each run is independent.')
-@click.option('--log-level', default='INFO', type=str,  help='The threshold for what messages will be logged. One of DEBUG, INFO, WARN, ERROR, or FATAL.')
-@click.option('--render', is_flag=True, help='Render the environment to monitor agents decisions')
-@click.option('--seed', '-s', type=str, help='A pre-written codebase to start from')
-@click.option('--force-fluid-discretization', help='Use fluid discretization even if an observation has lower and upper bounds defined', is_flag=True)
-@click.option('--fluid-discretization-history', help='Length of the observation history kept for fluid discretization', type=int, default=1024)
-@click.option('--allowed-commands', help='A list of allowed commands if you want to use a subset of BF++', type=str, default=None)
-def run_experiments(team_id, env, num_sprints, scrum_config, logdir,  max_failed_sprints,
-                    force_fluid_discretization, fluid_discretization_history,
-                    num_repetitions, allowed_commands, log_level, seed, render):
-    scrum_config = parse_config_string(scrum_config)
-    
-    if num_repetitions == 1:
-        experiment_dirs = [logdir]
-    else:
-        os.makedirs(logdir, exist_ok = True)
-        experiment_dirs = [f'exp{idx}' for idx in range(num_repetitions)]
-        
-    for experiment_dir in experiment_dirs:
-        get_dir_out_of_the_way(experiment_dir)
-        os.makedirs(experiment_dir)
-
-        if 'program_file' not in scrum_config:
-            scrum_config['program_file'] = os.path.join(experiment_dir, 'programs.pickle')
-
-        parent_logger = logging.getLogger('cibi')
-        parent_logger.setLevel(log_level)
-        parent_logger.addHandler(logging.FileHandler(f'{experiment_dir}/log.log'))
-
-        run_experiment(team_id, env, scrum_config, experiment_dir, 
-                       num_repetitions, num_sprints, max_failed_sprints, allowed_commands, render, seed,
-                       force_fluid_discretization, fluid_discretization_history)
 
 if __name__ == '__main__':
     run_experiments()

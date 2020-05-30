@@ -18,7 +18,7 @@ class ScrumMaster(Agent):
 
     def __init__(self, developers, env, 
                  observation_discretizer, action_sampler,
-                 seed_codebase = None,
+                 seed_codebase = None, sprints_elapsed=0,
                  sprint_length=100, stretch_sprints=True,
                  cycle_programs=True, syntax_error_reward=0, replay_temperature=1,
                  program_file=None):
@@ -42,7 +42,7 @@ class ScrumMaster(Agent):
         self.archive_branch = make_prod_codebase(deduplication=True, 
                                                  save_file=program_file)
 
-        if seed_codebase:
+        if seed_codebase and len(self.archive_branch) == 0:
             seed_codebase['replay_weight'] = np.exp(np.array(seed_codebase['test_quality']) 
                                                     / self.replay_temperature)
             self.archive_branch.merge(seed_codebase)
