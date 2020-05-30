@@ -117,7 +117,7 @@ class JuniorDeveloper():
         action_name, act = select(list(self.available_actions.items()), 
                                   weights=action_distribution)[0]
         logger.info(f'Junior developer decided to {action_name}')
-        return act(inspiration_branch, self.strategy)
+        return act(inspiration_branch)
 
     def accept_feedback(self, feedback_branch):
         logger.info('If they were good at processing feedback, they wouldn\'t be a junior developer')
