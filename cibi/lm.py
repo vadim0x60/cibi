@@ -51,7 +51,7 @@ LMConfig = namedtuple(
 default_config = {
   'batch_size': 4,
   'policy_lstm_sizes': [50,50],
-  'obs_embedding_size': 10,
+  'obs_embedding_size': 15,
   'grad_clip_threshold': 10.0,
   'param_init_factor':1.0,
   'lr':5e-5,
