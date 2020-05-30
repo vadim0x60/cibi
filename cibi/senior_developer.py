@@ -1,5 +1,8 @@
 import tensorflow as tf
+from tensorflow.python.client import device_lib
+
 import logging
+import itertools
 import pickle
 import os
 import time
@@ -36,6 +39,15 @@ def make_initialized_variable(value, name, shape=None, dtype=tf.float32):
       name=name, shape=shape, initializer=tf.constant_initializer(value),
       dtype=dtype, trainable=False)
 
+# TODO: see if we can use XLA
+devices = [device for device in device_lib.list_local_devices() 
+                  if device.device_type[:3] != 'XLA']
+gpus_available = any(device.device_type != 'CPU' for device in devices)
+if gpus_available:
+  # Only use GPUs
+  devices = [device for device in devices if device.device_type != 'CPU']
+device_cycle = itertools.cycle(devices)
+
 class SeniorDeveloper(object):
   """Writes code using 2 language models
 
@@ -52,35 +64,18 @@ class SeniorDeveloper(object):
     self.config = config
 
   def set_language(self, language, 
-                   task_id=0, ps_tasks=0, num_workers=1, is_chief=True, 
                    summary_writer=None, dtype=tf.float32,
                    summary_interval=1, run_number=0, model_v=0):
-    self.task_id = task_id
-    self.ps_tasks = ps_tasks
-    self.is_chief = is_chief
     self.graph = tf.Graph()
     
     with self.graph.as_default():
 
-      if ps_tasks == 0:
-        assert task_id == 0, 'No parameter servers specified. Expecting 1 task.'
-        assert num_workers == 1, (
-            'No parameter servers specified. Expecting 1 task.')
-        worker_device = '/job:localhost/replica:%d/task:0/cpu:0' % task_id
-        # worker_device = '/cpu:0'
-        # ps_device = '/cpu:0'
-      else:
-        assert num_workers > 0, 'There must be at least 1 training worker.'
-        worker_device = '/job:worker/replica:%d/task:0/cpu:0' % task_id
-        # ps_device = '/job:ps/replica:0/task:0/cpu:0'
-      logger.info('worker_device: %s', worker_device)
-
+      worker_device = next(device_cycle)
+      logger.info('worker_device: %s', worker_device.name)
       tf.get_variable_scope().set_use_resource(True)
 
       # global model
-      with tf.device(tf.train.replica_device_setter(ps_tasks,
-                                                    ps_device='/job:ps/replica:0',
-                                                    worker_device=worker_device)):
+      with tf.device(worker_device.name):
         with tf.variable_scope('global'):
           global_model = self._make_language_model(language, self.config, dtype=dtype, is_local=False)
           global_params_dict = {p.name: p
@@ -121,7 +116,7 @@ class SeniorDeveloper(object):
               0, 'program_count', dtype=tf.int64)
 
       # local model
-      with tf.device(worker_device):
+      with tf.device(worker_device.name):
         with tf.variable_scope('local'):
           self.model = model = self._make_language_model(
               language, 
@@ -194,21 +189,20 @@ class SeniorDeveloper(object):
       if not isinstance(summaries, (tuple, list)):
         summaries = [summaries]
       summaries.append(self._local_step_summary())
-      if self.is_chief:
-        (global_best_reward,
-         program_count) = session.run(
-             [self.global_best_reward,
-              self.program_count])
-        summaries.append(
-            tf.Summary(
-                value=[tf.Summary.Value(
-                    tag='model/best_reward',
-                    simple_value=global_best_reward)]))
-        summaries.append(
-            tf.Summary(
-                value=[tf.Summary.Value(
-                    tag='model/program_count',
-                    simple_value=program_count)]))
+      (global_best_reward,
+        program_count) = session.run(
+            [self.global_best_reward,
+            self.program_count])
+      summaries.append(
+          tf.Summary(
+              value=[tf.Summary.Value(
+                  tag='model/best_reward',
+                  simple_value=global_best_reward)]))
+      summaries.append(
+          tf.Summary(
+              value=[tf.Summary.Value(
+                  tag='model/program_count',
+                  simple_value=program_count)]))
       for s in summaries:
         self.summary_writer.add_summary(s, global_step)
       self.last_summary_time = time.time()
