@@ -7,7 +7,6 @@ import numpy as np
 from collections import namedtuple
 
 from cibi import utils
-from cibi.bf import bf_char_to_int
 
 logger = logging.getLogger(f'cibi.{__file__}')
 
@@ -47,19 +46,20 @@ class SeniorDeveloper(object):
 
   def __init__(self, config,
                make_language_model,
-               task_id=0, ps_tasks=0, num_workers=1, is_chief=True,
-               summary_writer=None,
-               dtype=tf.float32,
-               summary_interval=1,
-               run_number=0,
-               logging_dir='/tmp', model_v=0,
                name='senior'):
-    self.name = name
+    self.name = name 
+    self._make_language_model = make_language_model
+    self.config = config
+
+  def set_language(self, language, 
+                   task_id=0, ps_tasks=0, num_workers=1, is_chief=True, 
+                   summary_writer=None, dtype=tf.float32,
+                   summary_interval=1, run_number=0, model_v=0):
     self.task_id = task_id
     self.ps_tasks = ps_tasks
     self.is_chief = is_chief
     self.graph = tf.Graph()
-
+    
     with self.graph.as_default():
 
       if ps_tasks == 0:
@@ -75,11 +75,6 @@ class SeniorDeveloper(object):
         # ps_device = '/job:ps/replica:0/task:0/cpu:0'
       logger.info('worker_device: %s', worker_device)
 
-      logging_file = os.path.join(
-          logging_dir, 'solutions_%d.txt' % task_id)
-      self.topk_file = os.path.join(
-          logging_dir, 'topk_buffer_%d.pickle' % task_id)
-
       tf.get_variable_scope().set_use_resource(True)
 
       # global model
@@ -87,7 +82,7 @@ class SeniorDeveloper(object):
                                                     ps_device='/job:ps/replica:0',
                                                     worker_device=worker_device)):
         with tf.variable_scope('global'):
-          global_model = make_language_model(config, dtype=dtype, is_local=False)
+          global_model = self._make_language_model(language, self.config, dtype=dtype, is_local=False)
           global_params_dict = {p.name: p
                                 for p in global_model.sync_variables}
           self.global_model = global_model
@@ -128,9 +123,9 @@ class SeniorDeveloper(object):
       # local model
       with tf.device(worker_device):
         with tf.variable_scope('local'):
-          self.model = model = make_language_model(
-              config,
-              logging_file=logging_file,
+          self.model = model = self._make_language_model(
+              language, 
+              self.config,
               dtype=dtype,
               global_best_reward_fn=self.assign_global_best_reward_fn,
               program_count=self.program_count,
@@ -257,18 +252,9 @@ class SeniorDeveloper(object):
             tag='local_step/step',
             simple_value=self.local_step)])
 
-  def save_topk_buffer(self):
-    """Save top-k buffer to disk.
+  def hire(self, language, log_dir, events_dir=None, is_chief=True):
+    self.set_language(language)
 
-    Call this periodically so that training can recover if jobs go down.
-    """
-    if self.model.top_episodes is not None:
-      logger.info('Saving top-k buffer to "%s".', self.topk_file)
-      # Overwrite previous data each time.
-      with tf.gfile.FastGFile(self.topk_file, 'w') as f:
-        f.write(pickle.dumps(self.model.top_episodes))
-
-  def hire(self, log_dir, events_dir=None, is_chief=True):
     with self.graph.as_default():
       summary_writer = tf.summary.FileWriter(events_dir) if events_dir else None
 

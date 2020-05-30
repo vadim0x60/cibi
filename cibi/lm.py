@@ -20,7 +20,6 @@ import cibi.rollout as rollout_lib  # brain coder
 from cibi import utils
 from cibi import bf
 from cibi.codebase import make_dev_codebase, make_codebase_like, Codebase
-from cibi.bf import BF_EOS_INT, BF_EOS_CHAR, BF_INT_TO_CHAR, BF_CHAR_TO_INT, bf_int_to_char, bf_char_to_int
 
 import logging
 logger = logging.getLogger(f'cibi.{__file__}')
@@ -31,7 +30,7 @@ logger = logging.getLogger(f'cibi.{__file__}')
 # where run. The loss hyperparameters still match what is reported in the paper.
 MAGIC_LOSS_MULTIPLIER = 64
 
-def rshift_time(tensor_2d, fill=BF_EOS_INT):
+def rshift_time(tensor_2d, fill):
   """Right shifts a 2D tensor along the time dimension (axis-1)."""
   dim_0 = tf.shape(tensor_2d)[0]
   fill_tensor = tf.fill([dim_0, 1], fill)
@@ -144,11 +143,7 @@ class AttrDict(dict):
 
 class LanguageModel:
   """Language model agent."""
-  action_space = len(BF_INT_TO_CHAR)
-  observation_space = len(BF_INT_TO_CHAR)
-
-  def __init__(self, config={},
-               logging_file=None,
+  def __init__(self, language, config={},
                global_best_reward_fn=None,
                program_count=None,
                do_iw_summaries=False,
@@ -163,7 +158,6 @@ class LanguageModel:
     else:
       raise ValueError('Unsupported configuration format. Should be a dict or LMConfigs')
 
-    self.logging_file = logging_file
     self.verbose_level = verbose_level
     self.global_best_reward_fn = global_best_reward_fn
     self.parent_scope_name = tf.get_variable_scope().name
@@ -172,6 +166,13 @@ class LanguageModel:
 
     self.top_reward = 0.0
     self.embeddings_trainable = True
+
+    self.action_space = len(language['alphabet'])
+    self.observation_space = len(language['alphabet'])
+    self.int_to_char = language['int_to_char']
+    self.char_to_int = language['char_to_int']
+    self.eos_char = language['eos_char']
+    self.eos_int = language['eos_int']    
 
     self.no_op = tf.no_op()
 
@@ -240,7 +241,7 @@ class LanguageModel:
     # RL policy and value networks #
     ################################
 
-    initial_state = tf.fill([batch_size], BF_EOS_INT)
+    initial_state = tf.fill([batch_size], self.eos_int)
     def loop_fn(loop_time, cell_output, cell_state, loop_state):
       """Function called by tf.nn.raw_rnn to instantiate body of the while_loop.
 
@@ -292,7 +293,7 @@ class LanguageModel:
             tf.multinomial(logits=scaled_logits, num_samples=1)[:, 0],
             tf.zeros([batch_size], dtype=tf.int64)))
         elements_finished = tf.logical_or(
-            tf.equal(chosen_outputs, BF_EOS_INT),
+            tf.equal(chosen_outputs, self.eos_int),
             loop_time >= self.config.timestep_limit)
         output_lengths = tf.where(
             elements_finished,
@@ -353,7 +354,7 @@ class LanguageModel:
 
     self.actions = tf.placeholder(tf.int32, [None, None], name='actions')
     # Add SOS to beginning of the sequence.
-    inputs = rshift_time(self.actions, fill=BF_EOS_INT)
+    inputs = rshift_time(self.actions, fill=self.eos_int)
     with tf.variable_scope('policy', reuse=True):
       logits, _ = tf.nn.dynamic_rnn(
           self.policy_cell, tf.gather(obs_embeddings, inputs),
@@ -412,7 +413,7 @@ class LanguageModel:
       # Add SOS to beginning of the sequence.
       offp_inputs = tf.gather(obs_embeddings,
                               rshift_time(self.off_policy_targets,
-                                          fill=BF_EOS_INT))
+                                          fill=self.eos_int))
       with tf.variable_scope('policy', reuse=True):
         offp_logits, _ = tf.nn.dynamic_rnn(
             self.policy_cell, offp_inputs, self.off_policy_target_lengths,
@@ -662,8 +663,8 @@ class LanguageModel:
     for actions, episode_length, action_log_probs in zip(
         batch_actions, episode_lengths, log_probs
       ):
-      code = bf_int_to_char(actions[:episode_length])
-      if code[-1] == BF_EOS_CHAR:
+      code = self.int_to_char(actions[:episode_length])
+      if code[-1] == self.eos_char:
         code = code[:-1]
 
       logger.info(f'Wrote program: {code}')
@@ -704,7 +705,7 @@ class LanguageModel:
       
     if len(off_policy_branch):
       off_policy_target_lengths, off_policy_targets, _, _ = \
-        process_episodes(off_policy_branch, self.ema_by_len)
+        self.process_episodes(off_policy_branch)
       
       offp_switch = 1
     else:
@@ -713,7 +714,7 @@ class LanguageModel:
       offp_switch = 0
 
     feedback_lengths, feedback_actions, feedback_targets, feedback_returns = \
-      process_episodes(feedback_branch, self.ema_by_len)
+      self.process_episodes(feedback_branch)
 
     # Do update for REINFORCE or REINFORCE + replay buffer.
     if self.num_replay_per_batch == 0:
@@ -757,7 +758,7 @@ class LanguageModel:
       if (not empty_replay_buffer) and num_programs_from_replay_buff:
         replay_branch = self.inspiration_branch.sample(num_programs_from_replay_buff)
         replay_lengths, replay_actions, replay_batch_targets, replay_returns = \
-          process_episodes(replay_branch, self.ema_by_len)
+          self.process_episodes(replay_branch)
 
         replay_episode_actions = utils.stack_pad(replay_actions, pad_axes=0,
                                                  dtype=np.int32)
@@ -791,7 +792,7 @@ class LanguageModel:
       
       on_policy_branch = feedback_branch.sample(p)
       adjusted_lengths, episode_actions, batch_targets, batch_returns = \
-        process_episodes(on_policy_branch, self.ema_by_len)
+        self.process_episodes(on_policy_branch)
       batch_policy_multipliers = batch_targets
       batch_emp_values = [[]]
       on_policy_returns = batch_returns
@@ -949,6 +950,84 @@ class LanguageModel:
         summaries_list=summaries_list,
         gradients_dict=fetched['gradients'])
 
+  def process_episodes(self, reinforce_branch):
+    """Compute REINFORCE targets.
+
+    Treat a program as a reinforcement learning episode where a character
+    is an action and 'test_quality' is the reward for the last character
+
+    REINFORCE here takes the form:
+    grad_t = grad[log(pi(a_t|c_t))*target_t]
+    where c_t is context: i.e. RNN state or environment state (or both).
+
+    Args:
+      reinforce_branch: A Codebase with 'test_quality' metric
+      baselines: Provide baselines for each timestep. This is a
+          list (or indexable container) of length max_time. Note: baselines are
+          shared across all episodes, which is why there is no batch dimension.
+          It is up to the caller to update baselines accordingly.
+
+    Returns:
+      lengths: Length of every episode
+      actions: List of actions for every episode
+      targets: REINFORCE targets for each episode and timestep. A numpy
+          array of shape [batch_size, max_sequence_length].
+      returns: Returns computed for each episode and timestep. This is for
+          reference, and is not used in the REINFORCE gradient update (but was
+          used to compute the targets). A numpy array of shape
+          [batch_size, max_sequence_length].
+    """
+    assert 'test_quality' in reinforce_branch.metrics, 'Reinforcement has to contain a quality metric'
+    assert len(reinforce_branch)
+
+    lengths = [len(code) for code in reinforce_branch['code']]
+    baselines = self.ema_by_len
+
+    # We only reward the last character
+    # Everything else is a preparation for dat final punch
+    action_rewards = utils.stack_pad(
+      [[0] * (episode_length - 1) + [episode_reward]
+      for episode_reward, episode_length in 
+      zip(reinforce_branch['test_quality'], lengths)],
+      pad_axes=0
+    )
+
+    num_programs = len(action_rewards)
+    
+    batch_returns = [None] * num_programs
+    batch_targets = [None] * num_programs
+    for i in xrange(num_programs):
+      episode_length = lengths[i]
+      # Compute target for each timestep.
+      #    target_t = R_t - baselines[t]
+      #    where `baselines` are provided.
+      # In practice we use a more generalized formulation of advantage. See docs
+      # for `discounted_advantage_and_rewards`.
+      
+      # Compute return for each timestep. See section 3 of
+      # https://arxiv.org/pdf/1602.01783.pdf
+      assert baselines is not None
+      empirical_returns = rollout_lib.discount(action_rewards[i], gamma=1.0)
+      targets = [None] * episode_length
+      for j in xrange(episode_length):
+        targets[j] = empirical_returns[j] - baselines[j]
+      batch_returns[i] = empirical_returns
+      batch_targets[i] = targets
+
+    actions = utils.stack_pad(
+              [self.char_to_int(code)
+                for code in reinforce_branch['code']], 
+                pad_axes=0)
+    actions = np.array(actions, dtype=int)
+
+    returns = utils.stack_pad(batch_returns, 0)
+    if num_programs:
+      targets = utils.stack_pad(batch_targets, 0)
+    else:
+      targets = np.array([], dtype=np.float32)
+
+    return (lengths, actions, targets, returns)
+
 def compute_iw(codebase, replay_alpha):
     """Compute importance weights for a batch of episodes.
 
@@ -988,83 +1067,6 @@ def compute_iw(codebase, replay_alpha):
       except OverflowError:
         # This Softmax is too close for the CPU to handle
         # So it's safe to turn it into just max
-        importance_weights = np.zeros(len(codebase))
-        importance_weights[np.argmax(codebase['replay_weight'])] = 1
-        return importance_weights
-
-def process_episodes(reinforce_branch, baselines=None):
-  """Compute REINFORCE targets.
-
-  Treat a program as a reinforcement learning episode where a character
-  is an action and 'test_quality' is the reward for the last character
-
-  REINFORCE here takes the form:
-  grad_t = grad[log(pi(a_t|c_t))*target_t]
-  where c_t is context: i.e. RNN state or environment state (or both).
-
-  Args:
-    reinforce_branch: A Codebase with 'test_quality' metric
-    baselines: Provide baselines for each timestep. This is a
-        list (or indexable container) of length max_time. Note: baselines are
-        shared across all episodes, which is why there is no batch dimension.
-        It is up to the caller to update baselines accordingly.
-
-  Returns:
-    lengths: Length of every episode
-    actions: List of actions for every episode
-    targets: REINFORCE targets for each episode and timestep. A numpy
-        array of shape [batch_size, max_sequence_length].
-    returns: Returns computed for each episode and timestep. This is for
-        reference, and is not used in the REINFORCE gradient update (but was
-        used to compute the targets). A numpy array of shape
-        [batch_size, max_sequence_length].
-  """
-  assert 'test_quality' in reinforce_branch.metrics, 'Reinforcement has to contain a quality metric'
-  assert len(reinforce_branch)
-
-  lengths = [len(code) for code in reinforce_branch['code']]
-
-  # We only reward the last character
-  # Everything else is a preparation for dat final punch
-  action_rewards = utils.stack_pad(
-    [[0] * (episode_length - 1) + [episode_reward]
-     for episode_reward, episode_length in 
-     zip(reinforce_branch['test_quality'], lengths)],
-     pad_axes=0
-  )
-
-  num_programs = len(action_rewards)
-  
-  batch_returns = [None] * num_programs
-  batch_targets = [None] * num_programs
-  for i in xrange(num_programs):
-    episode_length = lengths[i]
-    # Compute target for each timestep.
-    #    target_t = R_t - baselines[t]
-    #    where `baselines` are provided.
-    # In practice we use a more generalized formulation of advantage. See docs
-    # for `discounted_advantage_and_rewards`.
-    
-    # Compute return for each timestep. See section 3 of
-    # https://arxiv.org/pdf/1602.01783.pdf
-    assert baselines is not None
-    empirical_returns = rollout_lib.discount(action_rewards[i], gamma=1.0)
-    targets = [None] * episode_length
-    for j in xrange(episode_length):
-      targets[j] = empirical_returns[j] - baselines[j]
-    batch_returns[i] = empirical_returns
-    batch_targets[i] = targets
-
-  actions = utils.stack_pad(
-            [bf_char_to_int(code)
-              for code in reinforce_branch['code']], 
-              pad_axes=0)
-  actions = np.array(actions, dtype=int)
-
-  returns = utils.stack_pad(batch_returns, 0)
-  if num_programs:
-    targets = utils.stack_pad(batch_targets, 0)
-  else:
-    targets = np.array([], dtype=np.float32)
-
-  return (lengths, actions, targets, returns)
+        weights = np.zeros(len(codebase))
+        weights[np.argmax(codebase['replay_weight'])] = 1
+      return importance_weights

@@ -83,7 +83,7 @@ class BfTest(tf.test.TestCase):
   def testBadChars(self):
     self.assertCorrectOutput(
         [2, 3, 4],
-        evaluate('>,[>,]hello<world[.<]comments',
+        evaluate('>,[>,]hllo<worl[.<]commnts',
                     input_buffer=[4, 3, 2]))
 
   def testUnmatchedBraces(self):

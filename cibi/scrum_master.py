@@ -161,9 +161,9 @@ class ScrumMaster(Agent):
         self.sprints_elapsed += 1
 
 def hire_team(developers, env, observation_discretizer, action_sampler, 
-              log_dir, events_dir, scrum_master_args, 
+              language, log_dir, events_dir, scrum_master_args, 
               seed_codebase=None):
-    employees = [dev.hire(log_dir, events_dir) 
+    employees = [dev.hire(language, log_dir, events_dir) 
                  for dev in developers]
     manager = ScrumMaster(employees, env, 
                           observation_discretizer, action_sampler,

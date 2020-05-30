@@ -17,6 +17,7 @@ import gym.spaces as s
 import numpy as np
 import time
 import itertools
+import re
 
 from typing import TYPE_CHECKING
 
@@ -45,22 +46,9 @@ class State(object):
   AWAITING_INPUT = 'awaiting-input'
   FINISHED = 'finished'
 
-SHORTHAND_ACTIONS = '01234'
-SHORTHAND_CELLS = 'abcde'
 DEFAULT_STEPS = 5
-CHARS = '@><^+-[].,!~' + SHORTHAND_ACTIONS + SHORTHAND_CELLS
 BF_EOS_INT = 0  # Also used as SOS (start of sequence).
 BF_EOS_CHAR = TEXT_EOS_CHAR = '_'
-BF_INT_TO_CHAR = BF_EOS_CHAR + CHARS
-BF_CHAR_TO_INT = dict([(c, i) for i, c in enumerate(BF_INT_TO_CHAR)])
-
-def bf_int_to_char(code_indices):
-  code = ''.join(BF_INT_TO_CHAR[i] for i in code_indices)
-  return code
-
-def bf_char_to_int(code):
-  code_indices = [BF_CHAR_TO_INT[c] for c in code]
-  return code_indices
 
 def buildbracemap(code):
   """Build jump map.
@@ -270,15 +258,59 @@ class ActionSampler:
 
   def __call__(self, action_stack):
     return self.sample(action_stack)
-    
+
+DIGITS = '0123456789'
+LETTERS = 'abcdefghijklmnopqrstuvwxyz'
+DEFAULT_CMD_SET = '@><^+-[].,!~01234abcde'
+
+def make_bf_plus(allowed_commands=DEFAULT_CMD_SET):
+  BF_INT_TO_CHAR = BF_EOS_CHAR + allowed_commands
+  BF_CHAR_TO_INT = dict([(c, i) for i, c in enumerate(BF_INT_TO_CHAR)])
+  pointer_actions = LETTERS + '><'
+  memory_actions = DIGITS + '\+\-'
+
+  def bf_int_to_char(code_indices):
+    code = ''.join(BF_INT_TO_CHAR[i] for i in code_indices)
+    return code
+
+  def bf_char_to_int(code):
+    code_indices = [BF_CHAR_TO_INT[c] for c in code]
+    return code_indices
+
+  def prune_step(code):
+    code = re.sub(r'\+\-|><|\-\+|<>', '', code)
+    code = re.sub(fr'[{pointer_actions}]+(?=[{LETTERS}])', '', code)
+    code = re.sub(fr'[{memory_actions}]+(?=[{DIGITS}])', '', code)
+    return code
+
+  def prune(code):
+    old_code = None
+    new_code = code
+
+    while new_code != old_code:
+      old_code, new_code = new_code, prune_step(new_code)
+
+    return new_code
+
+  return {
+    'alphabet': allowed_commands,
+    'int_to_char': bf_int_to_char,
+    'char_to_int': bf_char_to_int,
+    'eos_int': BF_EOS_INT,
+    'eos_char': BF_EOS_CHAR,
+    'prune': prune
+  }
+
 class Executable(Agent):
   def __init__(self, code, observation_discretizer, action_sampler,
+               language=make_bf_plus(),
                log_prob=None,
                init_memory=None, null_value=0,
                max_steps=2 ** 12, require_correct_syntax=True, debug=False,
                cycle = False):
     self.code = code
     self.log_prob = log_prob
+    self.alphabet = language['alphabet']
 
     code = list(code)
     self.bracemap, correct_syntax = buildbracemap(code)  # will modify code list
@@ -376,52 +408,53 @@ class Executable(Agent):
     command = self.code[self.codeptr]
     self.record_snapshot(command)
 
-    if command == '>':
-      self.cellptr += 1
+    if command in self.alphabet:
+      if command == '>':
+        self.cellptr += 1
 
-    if command == '<':
-      self.cellptr = 0 if self.cellptr <= 0 else self.cellptr - 1
+      if command == '<':
+        self.cellptr = 0 if self.cellptr <= 0 else self.cellptr - 1
 
-    if command == '^':
-      # I don't trust languages without GOTO
-      goto = int(self.read())
-      if goto >= 0:
-        self.cellptr = goto
+      if command == '^':
+        # I don't trust languages without GOTO
+        goto = int(self.read())
+        if goto >= 0:
+          self.cellptr = goto
 
-    if command == '+':
-      value = self.read()
-      value += 1
-      self.write(value)
+      if command == '+':
+        value = self.read()
+        value += 1
+        self.write(value)
 
-    if command == '-':
-      value = self.read()
-      value -= 1
-      self.write(value)
+      if command == '-':
+        value = self.read()
+        value -= 1
+        self.write(value)
 
-    if command == '~':
-      value = self.read()
-      value = -value
-      self.write(value) 
+      if command == '~':
+        value = self.read()
+        value = -value
+        self.write(value) 
 
-    if command == '@':
-      self.write(np.random.randint(DEFAULT_STEPS))
+      if command == '@':
+        self.write(np.random.randint(DEFAULT_STEPS))
 
-    if command in SHORTHAND_ACTIONS:
-      self.write(SHORTHAND_ACTIONS.index(command))
+      if command in DIGITS:
+        self.write(DIGITS.index(command))
 
-    if command in SHORTHAND_CELLS:
-      self.cellptr = SHORTHAND_CELLS.index(command)
+      if command in LETTERS:
+        self.cellptr = LETTERS.index(command)
 
-    if command == '[' and self.read() <= 0: self.codeptr = self.bracemap[self.codeptr]
-    if command == ']' and self.read() > 0: self.codeptr = self.bracemap[self.codeptr]
+      if command == '[' and self.read() <= 0: self.codeptr = self.bracemap[self.codeptr]
+      if command == ']' and self.read() > 0: self.codeptr = self.bracemap[self.codeptr]
 
-    if command == '.': self.action_stack.insert(0, self.read())
-    if command == '!': self.action_stack.append(self.read())
+      if command == '.': self.action_stack.insert(0, self.read())
+      if command == '!': self.action_stack.append(self.read())
 
-    if command == ',':
-      self.state = State.AWAITING_INPUT
-      self.record_snapshot(command)
-      return
+      if command == ',':
+        self.state = State.AWAITING_INPUT
+        self.record_snapshot(command)
+        return
 
     self.codeptr += 1
     self.steps += 1
