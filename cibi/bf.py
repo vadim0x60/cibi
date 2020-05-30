@@ -293,7 +293,7 @@ def make_bf_plus(allowed_commands=DEFAULT_CMD_SET):
     return new_code
 
   return {
-    'alphabet': allowed_commands,
+    'alphabet': BF_INT_TO_CHAR,
     'int_to_char': bf_int_to_char,
     'char_to_int': bf_char_to_int,
     'eos_int': BF_EOS_INT,

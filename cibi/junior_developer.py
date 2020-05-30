@@ -18,7 +18,7 @@ def select(elements, weights, k=1):
 def mut_with_number_arrays(mutate_over_numbers):
     def mutate_over_chars(language, old_code, indpb):
         old_code = language['char_to_int'](old_code)
-        new_code = mutate_over_numbers(old_code, indpb)
+        new_code = mutate_over_numbers(language, old_code, indpb)
 
         new_code = language['int_to_char'](new_code)
         return new_code
