@@ -1,0 +1,7 @@
+env: Taxi-v3
+num-sprints: 100000
+team: 0
+allowed-commands: "@><^+-[].,!~01234abcde"
+seed: taxi3.txt
+scrum:
+    syntax_error_reward: -200

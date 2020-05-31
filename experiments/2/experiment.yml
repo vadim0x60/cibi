@@ -1,0 +1,4 @@
+env: CartPole-v1
+num-sprints: 100000
+team: 0
+allowed-commands: "@><^+-[].,!~01234abcde"

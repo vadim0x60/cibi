@@ -1,0 +1,6 @@
+env: BipedalWalker-v2
+num-sprints: 100000
+team: 0
+allowed-commands: "><+-[].,!01234abcde"
+scrum:
+    syntax_error_reward: -500
