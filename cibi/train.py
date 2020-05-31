@@ -16,11 +16,14 @@ from cibi.teams import teams
 from cibi.scrum_master import hire_team
 from cibi.stream_discretizer import burn_in
 
+logging.basicConfig(format='%(asctime)s %(message)s')
+logger = logging.getLogger('cibi')
+
 def ensure_enough_test_runs(codebase, env, observation_discretizer, action_sampler, runs=100, render=False):
     assert codebase.deduplication
 
     for code, count, result in zip(codebase['code'], codebase['count'], codebase['result']):
-        if result == 'syntax-error' or 'step-limit':
+        if result in ['syntax-error', 'step-limit']:
             continue
 
         program = bf.Executable(code, observation_discretizer, action_sampler, cycle=True, debug=False)
@@ -28,7 +31,7 @@ def ensure_enough_test_runs(codebase, env, observation_discretizer, action_sampl
             rollout = program.attend_gym(env, render=render)
             codebase.commit(code, metrics={'test_quality': rollout.total_reward})
 
-def make_seed_codebase(seed_file, env, observation_discretizer, action_sampler, logger):
+def make_seed_codebase(seed_file, env, observation_discretizer, action_sampler):
     seed_codebase = None
 
     if seed_file:
@@ -62,8 +65,6 @@ def run_experiments(logdir):
 
     scrum_config['program_file'] = os.path.join(logdir, 'programs.pickle')
 
-    logging.basicConfig(format='%(asctime)s %(message)s')
-    logger = logging.getLogger('cibi')
     logger.setLevel(config.get('log_level', 'INFO'))
     logger.addHandler(logging.FileHandler(f'{logdir}/log.log'))
     logger.info(config['env'])
@@ -107,7 +108,7 @@ def run_experiments(logdir):
 
     random_agent = bf.Executable('@!', observation_discretizer, action_sampler, cycle=True, debug=False)
     burn_in(env, random_agent, observation_discretizer, action_sampler)
-    seed_codebase = make_seed_codebase(seed, env, observation_discretizer, action_sampler, logger)
+    seed_codebase = make_seed_codebase(seed, env, observation_discretizer, action_sampler)
 
     failed_sprints = 0
     with hire_team(team, env, observation_discretizer, action_sampler, language,
