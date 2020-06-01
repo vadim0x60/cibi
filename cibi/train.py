@@ -89,13 +89,13 @@ def run_experiments(logdir):
         summary = {
             'shortest_episode': float('inf'),
             'longest_episode': 0,
+            'sprints_elapsed': 0,
+            'seconds_elapsed': 0,
             'max_total_reward': float('-inf')
         }
     summary['cibi_version'] = cibi.__version__
-    try:
-        scrum_config['sprints_elapsed'] = summary['sprints_elapsed']
-    except KeyError:
-        pass
+    scrum_config['sprints_elapsed'] = summary['sprints_elapsed']
+    start_time -= summary['seconds_elapsed']
 
     train_dir = os.path.join(logdir, 'train')
     events_dir = os.path.join(logdir, 'events')
