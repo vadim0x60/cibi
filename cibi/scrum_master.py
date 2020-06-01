@@ -35,7 +35,7 @@ class ScrumMaster(Agent):
         self.sprint_length = sprint_length
         self.sprint_ttl = sprint_length
         self.stretch_sprints = stretch_sprints
-        self.sprints_elapsed = 0
+        self.sprints_elapsed = sprints_elapsed
 
         self.dev_branch = make_dev_codebase()
         self.feedback_branch = make_prod_codebase(deduplication=False)
