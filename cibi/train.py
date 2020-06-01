@@ -133,7 +133,7 @@ def run_experiments(logdir):
                 failed_sprints += 1
                 if failed_sprints > max_failed_sprints:
                     logger.error('Tolerance for failed sprints exceeded')
-                    break
+                    raise e
 
         logger.info(f'Summary: {summary}')
         
