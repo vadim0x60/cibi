@@ -8,5 +8,5 @@ dill==0.*
 sortedcontainers==2.*
 sortedcollections==1.*
 deap==1.*
-pyaml==5.*
+pyyaml==5.*
 git+git://github.com/akiani/gym-sepsis
