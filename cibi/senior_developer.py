@@ -265,7 +265,9 @@ class SeniorDeveloper(object):
                                 save_model_secs=30,
                                 save_summaries_secs=30)
 
-      return EmployedDeveloper(self, sv.managed_session())
+      config = tf.ConfigProto(allow_soft_placement=True,
+                              gpu_options=tf.GPUOptions(allow_growth=True))
+      return EmployedDeveloper(self, sv.managed_session(config=config))
 
 def init_fn(unused_sess):
   logger.info('No checkpoint found. Initialized global params.')
