@@ -1067,6 +1067,6 @@ def compute_iw(codebase, replay_alpha):
       except OverflowError:
         # This Softmax is too close for the CPU to handle
         # So it's safe to turn it into just max
-        weights = np.zeros(len(codebase))
-        weights[np.argmax(codebase['replay_weight'])] = 1
+        importance_weights = np.zeros(len(codebase))
+        importance_weights[np.argmax(codebase['replay_weight'])] = 1
       return importance_weights
