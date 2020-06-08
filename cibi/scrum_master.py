@@ -159,7 +159,7 @@ class ScrumMaster(Agent):
                                           cycle=self.cycle_programs)
         self.sprint_ttl = self.sprint_length
         self.sprints_elapsed += 1
-
+        
 def hire_team(developers, env, observation_discretizer, action_sampler, 
               language, log_dir, events_dir, scrum_master_args, 
               seed_codebase=None):

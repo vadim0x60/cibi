@@ -209,3 +209,16 @@ def parse_config_string(config_str):
       key, value = config_statement.split('=')
       config[key] = ast.literal_eval(value)
   return config
+
+def ensure_enough_test_runs(codebase, env, observation_discretizer, action_sampler, runs=100, render=False):
+  from cibi import bf
+  assert codebase.deduplication
+
+  for code, count, result in zip(codebase['code'], codebase['count'], codebase['result']):
+      if result in ['syntax-error', 'step-limit']:
+          continue
+
+      program = bf.Executable(code, observation_discretizer, action_sampler, cycle=True, debug=False)
+      for _ in range(runs - count):
+          rollout = program.attend_gym(env, render=render)
+          codebase.commit(code, metrics={'test_quality': rollout.total_reward})

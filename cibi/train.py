@@ -8,8 +8,7 @@ import yaml
 
 import cibi
 from cibi import bf
-from cibi.utils import get_dir_out_of_the_way
-from cibi.utils import parse_config_string
+from cibi.utils import ensure_enough_test_runs
 from cibi.codebase import make_prod_codebase
 from cibi.extensions import make_gym
 from cibi.teams import teams
@@ -18,18 +17,6 @@ from cibi.stream_discretizer import burn_in
 
 logging.basicConfig(format='%(asctime)s %(message)s')
 logger = logging.getLogger('cibi')
-
-def ensure_enough_test_runs(codebase, env, observation_discretizer, action_sampler, runs=100, render=False):
-    assert codebase.deduplication
-
-    for code, count, result in zip(codebase['code'], codebase['count'], codebase['result']):
-        if result in ['syntax-error', 'step-limit']:
-            continue
-
-        program = bf.Executable(code, observation_discretizer, action_sampler, cycle=True, debug=False)
-        for _ in range(runs - count):
-            rollout = program.attend_gym(env, render=render)
-            codebase.commit(code, metrics={'test_quality': rollout.total_reward})
 
 def make_seed_codebase(seed_file, env, observation_discretizer, action_sampler):
     seed_codebase = None
