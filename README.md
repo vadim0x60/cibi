@@ -112,8 +112,43 @@ shortest_episode: 8
 sprints_elapsed: 100000
 ```
 
-## NeurIPS experiments
+## Codebases
 
-`experiments` folder contains experiments with `CartPole-v1` (0-3), `MountainCarContinuous-v0` (4-7), `Taxi-v3` (8-11), `BipedalWalker-v3` (12-14) and `LunarLanderContinuous-v2` (15-17) we've done for our NeurIPS submission
+`codebases` folder contains a few programs we've written for `CartPole-v1`, `MountainCarContinuous-v0` and `Taxi-v3` environments to be used as seeds.
+
+For example, for `Taxi-v3` we've implemented an algorithm that finds what the current destination should be and always moves in its direction:
+
+```
+# Memory map
+[T T Pid Did id_pointer D D A_plan]
+
+# Destination derivation
+e2[e+>0>0c[e>0>4e^-e>>>>0]c[e>4>0e^-e>>>>0]c[e>4>3e^-e>>>>0]]
+
+# Absolute destination to relative destination
+a[e>-a-]b[e>>-b-]
+
+# Move using the relative destination
+e>>>4+e---[e>>>4e0]e>[>>0e>0]e>~[>>1e>0]e>>[>2e>>0]e>>~[>3e>>0]>!
+
+# Move back to a
+a
+```
+
+If it's stuck at a wall, it does nothing to unstuck itself - a fatal flaw fixed by the program synthesis system.
+
+## Experiments
+
+`experiments` folder contains experiments with `CartPole-v1` (0-3), `MountainCarContinuous-v0` (4-7), `Taxi-v3` (8-11), we've done for our NeurIPS submission
 
 Re-run them with `python cibi/train.py experiments/NUMBER` or download our results with `python cibi/download.py`
+
+Total episode reward achieved by resulting programs, averaged over 100 episodes:
+
+| Environment     | CartPole     | Mountain Car | Taxi |
+| ------ | ------ | ------- | ------ |
+| expert BF++, no training | -17.96 | -2.79 | -209 |
+| BF+ (without shorthands) | 41.43 | 71.49 | -161.31 |
+| BF+ (without `@^~`)     | 44.25 | 5.67 | -199.86 |
+| BF++     | 53.45       | 68.95 | -199.83 |
+| BF++ with expert seed  | 61.96 | 68.82 | -83.17 |
