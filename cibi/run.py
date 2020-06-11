@@ -40,7 +40,7 @@ def average(coll):
 @click.option('--fluid-discretization-history', help='Length of the observation history kept for fluid discretization', type=int, default=1024)
 @click.option('--input-file', '-i', help='Load the programs from a specified file')
 @click.option('--output-file', '-o', help='Save total rewards to a file')
-@click.option('--debug', is_flag=True, help='Log full execution traces')
+@click.option('--debug', is_flag=True, help='Show a visual rendering of the env and log full execution traces')
 def run(env_name, input_code, avg, best, input_file, output_file, 
         debug, force_fluid_discretization, fluid_discretization_history):
     env = make_gym(env_name)
