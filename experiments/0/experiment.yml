@@ -1,4 +1,4 @@
 env: CartPole-v1
-num-sprints: 100000
+max-sprints-without-improvement: 10000
 team: 0
 allowed-commands: "@><^+-[].,!~"

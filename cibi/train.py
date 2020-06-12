@@ -47,7 +47,9 @@ def run_experiments(logdir):
     render = config.get('render', False)
     discretization_config = config.get('discretization', {})
     scrum_config = config.get('scrum', {})
-    max_failed_sprints = config.get('max_failed_sprints', 3)
+    max_failed_sprints = config.get('max-failed-sprints', 3)
+    max_sprints = config.get('max-sprints', 1000000)
+    max_sprints_without_improvement = config.get('max-sprints-without-improvement', 1000000)
     os.makedirs(logdir, exist_ok=True)
 
     scrum_config['program_file'] = os.path.join(logdir, 'programs.pickle')
@@ -98,16 +100,23 @@ def run_experiments(logdir):
     seed_codebase = make_seed_codebase(seed, env, observation_discretizer, action_sampler)
 
     failed_sprints = 0
+    sprints_without_improvement = 0
     with hire_team(team, env, observation_discretizer, action_sampler, language,
                 train_dir, events_dir, scrum_config, seed_codebase) as agent:
-        while agent.sprints_elapsed < config['num-sprints']:
+        while (agent.sprints_elapsed < max_sprints 
+           and sprints_without_improvement < max_sprints_without_improvement):
             try:
                 rollout = agent.attend_gym(env, max_reps=None, render=render)
 
                 episode_length = len(rollout)
                 summary['shortest_episode'] = min(summary['shortest_episode'], episode_length)
                 summary['longest_episode'] = max(summary['longest_episode'], episode_length)
-                summary['max_total_reward'] = max(summary['max_total_reward'], rollout.total_reward)
+                if summary['max_total_reward'] < rollout.total_reward:
+                    sprints_without_improvement = 0
+                    summary['max_total_reward'] = rollout.total_reward
+                else:
+                    sprints_without_improvement += 1
+                    
                 summary['sprints_elapsed'] = agent.sprints_elapsed
                 summary['seconds_elapsed'] = time.monotonic() - start_time
 

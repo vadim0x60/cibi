@@ -68,17 +68,17 @@ To train a program synthesis model and generate programs for an environment, cre
 
 ```
 env: MountainCarContinuous-v0
-num-sprints: 100000
 team: 0
 ```
 
-"Team 0" means generating programs with one LSTM. In the future, more configurations will be available including genetic programming. In this case, 400000 (`4*num_sprints`) programs will be written since our batch size is 4.
+"Team 0" means generating programs with one LSTM. In the future, more configurations will be available including genetic programming. 
 
 An example that specifies everything that can be specified: 
 
 ```
 env: MountainCarContinuous-v0
-num-sprints: 100000
+max-sprints: 1000000
+max-sprints-without-improvement: 10000
 team: 0
 allowed-commands: "@><^+-[].,!~01234"
 seed: mcc0.txt
@@ -88,6 +88,7 @@ scrum:
     stretch_sprints: false
 ```
 
+`max-sprints` sets the absolute number of sprints after which training will end. In this case, no more than 4000000 (`4max-sprints`) programs will be written since our batch size is 4. `max-sprints-without-improvement` lets you set early stopping
 `allowed-commands` let's you use a subset of BF++ instead of the full language
 `seed` let's you use programs you already have to jumpstart the training (the seed file has to be in `EXPERIMENT_DIR` or in `codebases`)
 `syntax_error_reward` is 0 by default - it works well for environments that use positive reinforcement. However, if your environment uses negative reinforcement and total reward is often lower than zero, make sure to set `syntax_error_reward` to a subzero value or otherwise `cibi` may decide that 0 is far from the worst case and a syntax error is better than trying to do something. Frustration is a thing in AI too.
