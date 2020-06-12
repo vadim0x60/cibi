@@ -8,7 +8,7 @@ import yaml
 
 import cibi
 from cibi import bf
-from cibi.utils import ensure_enough_test_runs
+from cibi.utils import ensure_enough_test_runs, get_project_dir
 from cibi.codebase import make_prod_codebase
 from cibi.extensions import make_gym
 from cibi.teams import teams
@@ -64,11 +64,10 @@ def run_experiments(logdir):
 
     seed = config.get('seed')
     if seed:
-        predefined_path = os.path.split(os.path.realpath(__file__))
-        predefined_path = os.path.join(*(predefined_path[:-2] 
-                                       + ('codebases', config['seed'])))
-        custom_path = os.path.realpath(config['seed'])
-        seed = predefined_path if os.path.isfile(predefined_path) else custom_path
+        hardcoded_path = os.path.join(get_project_dir('codebases'), config['seed'])
+        custom_path = os.path.join(logdir, config['seed'])
+
+        seed = predefined_path if os.path.isfile(hardcoded_path) else custom_path
         logger.info(f'Taking programs from {seed} as gospel')
 
     try:

@@ -222,3 +222,7 @@ def ensure_enough_test_runs(codebase, env, observation_discretizer, action_sampl
       for _ in range(runs - count):
           rollout = program.attend_gym(env, render=render)
           codebase.commit(code, metrics={'test_quality': rollout.total_reward})
+
+def get_project_dir(dir):
+  import os
+  return os.path.join(*(os.path.split(__file__)[:-2] + (dir,)))
