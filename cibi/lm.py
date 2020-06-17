@@ -644,7 +644,8 @@ class LanguageModel:
     # programs will be executed and added to the replay buffer. Those which
     # are not executed will be discarded and not counted.
 
-    self.inspiration_branch = inspiration_branch
+    length_limit = f'code.str.len() < {self.config.timestep_limit}'
+    self.inspiration_branch = inspiration_branch.query(length_limit)
 
     batch_actions, episode_lengths, log_probs = session.run(
         [self.sampled_batch.tokens,

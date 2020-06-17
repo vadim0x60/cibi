@@ -116,6 +116,11 @@ class Codebase():
                                              metadata=metadata, 
                                              count = 1)
 
+    def query(self, expr):
+        subcodebase = make_codebase_like(self)
+        subcodebase.data_frame = self.data_frame.query(expr)
+        return subcodebase
+
     def replace(self, other_codebase):
         assert self.metrics == other_codebase.metrics
         assert self.metadata == other_codebase.metadata
