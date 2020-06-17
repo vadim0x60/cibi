@@ -112,7 +112,7 @@ def run_experiments(logdir):
                 summary['longest_episode'] = max(summary['longest_episode'], episode_length)
                 if summary['max_total_reward'] < rollout.total_reward:
                     sprints_without_improvement = 0
-                    summary['max_total_reward'] = rollout.total_reward
+                    summary['max_total_reward'] = float(rollout.total_reward)
                 else:
                     sprints_without_improvement += 1
                     

@@ -1,4 +1,4 @@
-env: BipedalWalker-v3
+env: BipedalWalker-v2
 max-sprints-without-improvement: 10000
 team: 1
 allowed-commands: "@><^+-[].,!~"
