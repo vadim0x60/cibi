@@ -12,5 +12,6 @@ from cibi.lm import LanguageModel
 
 teams = [
     [SeniorDeveloper({}, LanguageModel)],
-    [SeniorDeveloper({}, LanguageModel), JuniorDeveloper()]   
+    [SeniorDeveloper({}, LanguageModel), JuniorDeveloper()],
+    [JuniorDeveloper()]   
 ]

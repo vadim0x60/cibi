@@ -1,0 +1,6 @@
+env: MountainCarContinuous-v0
+max-sprints-without-improvement: 10000
+team: 2
+seed: mcc0.txt
+scrum:
+    syntax_error_reward: -200
