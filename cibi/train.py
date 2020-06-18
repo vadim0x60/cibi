@@ -67,7 +67,7 @@ def run_experiments(logdir):
         hardcoded_path = os.path.join(get_project_dir('codebases'), config['seed'])
         custom_path = os.path.join(logdir, config['seed'])
 
-        seed = predefined_path if os.path.isfile(hardcoded_path) else custom_path
+        seed = hardcoded_path if os.path.isfile(hardcoded_path) else custom_path
         logger.info(f'Taking programs from {seed} as gospel')
 
     try:
