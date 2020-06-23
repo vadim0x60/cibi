@@ -5,6 +5,7 @@ import logging
 import gym
 import time
 import yaml
+import traceback
 
 import cibi
 from cibi import bf
@@ -124,7 +125,7 @@ def run_experiments(logdir):
 
                 failed_sprints = 0
             except Exception as e:
-                logger.error(e)
+                logger.error(traceback.format_exc())
                 failed_sprints += 1
                 if failed_sprints > max_failed_sprints:
                     logger.error('Tolerance for failed sprints exceeded')
