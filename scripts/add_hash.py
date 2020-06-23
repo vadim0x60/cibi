@@ -1,10 +1,8 @@
 import click
 import os
 import yaml
-import hashlib
 
-def calc_hash(val):
-    return hashlib.sha224(str(val).encode('utf-8')).hexdigest()
+from cibi.utils import calc_hash
 
 @click.command()
 @click.argument('exp_dir')

@@ -9,7 +9,7 @@ import traceback
 
 import cibi
 from cibi import bf
-from cibi.utils import ensure_enough_test_runs, get_project_dir
+from cibi.utils import ensure_enough_test_runs, get_project_dir, calc_hash
 from cibi.codebase import make_prod_codebase
 from cibi.extensions import make_gym
 from cibi.teams import teams
@@ -44,10 +44,11 @@ def make_seed_codebase(seed_file, env, observation_discretizer, action_sampler):
 def run_experiments(logdir):
     with open(os.path.join(logdir, 'experiment.yml'), 'r') as f:
         config = yaml.load(f)
+        config_hash = calc_hash(config)
 
     render = config.get('render', False)
     discretization_config = config.get('discretization', {})
-    scrum_config = config.get('scrum', {})
+    scrum_config = config.get('scrum', {}).copy()
     max_failed_sprints = config.get('max-failed-sprints', 3)
     max_sprints = config.get('max-sprints', 1000000)
     max_sprints_without_improvement = config.get('max-sprints-without-improvement', 1000000)
@@ -67,21 +68,28 @@ def run_experiments(logdir):
     if seed:
         hardcoded_path = os.path.join(get_project_dir('codebases'), config['seed'])
         custom_path = os.path.join(logdir, config['seed'])
-
+        
         seed = hardcoded_path if os.path.isfile(hardcoded_path) else custom_path
         logger.info(f'Taking programs from {seed} as gospel')
 
     try:
         with open(os.path.join(logdir, 'summary.yml'), 'r') as f:
             summary = yaml.load(f)
+            if 'experiment' in summary and config_hash != summary['experiment']:
+                summary = None
     except FileNotFoundError as e:
+        summary = None
+      
+    if summary is None:
         summary = {
             'shortest_episode': float('inf'),
             'longest_episode': 0,
             'sprints_elapsed': 0,
             'seconds_elapsed': 0,
-            'max_total_reward': float('-inf')
+            'max_total_reward': float('-inf'),
+            'experiment': config_hash
         }
+    
     summary['cibi_version'] = cibi.__version__
     scrum_config['sprints_elapsed'] = summary['sprints_elapsed']
     start_time -= summary['seconds_elapsed']

@@ -202,6 +202,10 @@ def get_dir_out_of_the_way(path):
             shutil.move(path, alternative_path)
             break
 
+def get_project_dir(dir):
+  import os
+  return os.path.join(*(os.path.split(__file__)[:-2] + (dir,)))
+
 def parse_config_string(config_str):
   config = {}
   for config_statement in config_str.split(','):
@@ -223,6 +227,6 @@ def ensure_enough_test_runs(codebase, env, observation_discretizer, action_sampl
           rollout = program.attend_gym(env, render=render)
           codebase.commit(code, metrics={'test_quality': rollout.total_reward})
 
-def get_project_dir(dir):
-  import os
-  return os.path.join(*(os.path.split(__file__)[:-2] + (dir,)))
+def calc_hash(val):
+  import hashlib
+  return hashlib.sha224(str(val).encode('utf-8')).hexdigest()
