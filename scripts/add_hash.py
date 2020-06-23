@@ -1,12 +1,10 @@
 import click
 import os
 import yaml
+import hashlib
 
-def hash_dict(d):
-    if type(d) == dict:
-        return hash((k, hash_dict(v)) for k, v in d.items())
-    else:
-        return hash(d)
+def calc_hash(val):
+    return hashlib.sha224(str(val).encode('utf-8')).hexdigest()
 
 @click.command()
 @click.argument('exp_dir')
@@ -31,7 +29,7 @@ def add_hash(exp_dir):
             experiment = yaml.load(experiment_f)
 
         with open(summary_path, 'w') as summary_f:
-            summary['experiment'] = hash_dict(experiment)
+            summary['experiment'] = calc_hash(experiment)
             yaml.dump(summary, summary_f)
 
 if __name__ == '__main__':
