@@ -1,6 +1,7 @@
 from cibi import bf
 from cibi.codebase import make_dev_codebase
 from cibi.genome import make_chromosome_from_blueprint
+from cibi.utils import retry
 
 from deap.tools import crossover, mutation
 import re
@@ -121,7 +122,9 @@ class JuniorDeveloper():
         action_name, act = select(list(self.available_actions.items()), 
                                   weights=action_distribution)[0]
         logger.info(f'Junior developer decided to {action_name}')
-        return act(inspiration_branch)
+
+        act_with_retries = retry(act, attempts=10, test=lambda codebase: len(codebase) != 0)
+        return act_with_retries(inspiration_branch)
 
     def accept_feedback(self, feedback_branch):
         logger.info('If they were good at processing feedback, they wouldn\'t be a junior developer')

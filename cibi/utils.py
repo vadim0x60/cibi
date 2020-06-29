@@ -230,3 +230,21 @@ def ensure_enough_test_runs(codebase, env, observation_discretizer, action_sampl
 def calc_hash(val):
   import hashlib
   return hashlib.sha224(str(val).encode('utf-8')).hexdigest()
+
+def retry(f, test=lambda x: True, attempts=3, exceptions=BaseException):
+  import traceback
+
+  def f_with_retries(*args, **kwargs):
+    result = None
+
+    for idx in range(attempts - 1):
+      try:
+        result = f(*args, **kwargs)
+        if test(result):
+          return result
+      except exceptions:
+        logger.error(traceback.format_exc())
+        pass
+
+    return f(*args, **kwargs)
+  return f_with_retries
