@@ -91,6 +91,11 @@ class JuniorDeveloper():
         return codebase
 
     def mate(self, inspiration_branch):
+        codebase = make_dev_codebase()
+
+        if len(inspiration_branch) < 2:
+            return codebase
+
         code1, code2 = inspiration_branch.sample(2, metric='test_quality')['code']
         code1, code2 = list(code1), list(code2)
 
@@ -100,7 +105,6 @@ class JuniorDeveloper():
             logger.info(f'{crossover_name} crossover between {code1} and {code2}')
             crossover(code1, code2, self.strategy['indpb'].get())
 
-        codebase = make_dev_codebase()
         codebase.commit(''.join(code1))
         codebase.commit(''.join(code2))
         return codebase
