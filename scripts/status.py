@@ -27,16 +27,22 @@ def status(parent_dir, exp_name):
     top_path = os.path.join(exp_dir, 'top.pickle')
 
     if os.path.exists(experiment_path):
-        if os.path.exists(summary_path):
-            with open(summary_path) as summary_f:
-                mtr = yaml.safe_load(summary_f)['max_total_reward']
+        msg = f'{exp_name} - NOT STARTED'
 
+        if os.path.exists(summary_path):
             if os.path.exists(top_path):
-                print(f'{exp_name} - FINISHED, mtr {mtr}')
+                msg = f'{exp_name} - FINISHED'
             else:
-                print(f'{exp_name} - IN PROGRESS, mtr {mtr}')
-        else:
-            print(f'{exp_name} - NOT STARTED')
+                msg = f'{exp_name} - IN PROGRESS'
+
+            try:
+                with open(summary_path) as summary_f:
+                    mtr = yaml.safe_load(summary_f)['max_total_reward']
+                    msg += f', mtr {mtr}'
+            except yaml.YAMLError:
+                pass
+
+        print(msg)
 
 if __name__ == '__main__':
     status_cmd()
