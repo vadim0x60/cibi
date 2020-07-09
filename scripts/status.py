@@ -1,5 +1,6 @@
 import click
 import os
+import yaml
 
 @click.command()
 @click.argument('exp_dir')
@@ -27,10 +28,13 @@ def status(parent_dir, exp_name):
 
     if os.path.exists(experiment_path):
         if os.path.exists(summary_path):
+            with open(summary_path) as summary_f:
+                mtr = yaml.safe_load(summary_f)['max_total_reward']
+
             if os.path.exists(top_path):
-                print(f'{exp_name} - FINISHED')
+                print(f'{exp_name} - FINISHED, mtr {mtr}')
             else:
-                print(f'{exp_name} - IN PROGRESS')
+                print(f'{exp_name} - IN PROGRESS, mtr {mtr}')
         else:
             print(f'{exp_name} - NOT STARTED')
 
