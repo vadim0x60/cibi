@@ -87,15 +87,16 @@ class ScrumMaster(Agent):
         self.prod_program.init()
 
     def input(self, inp):
-        try:
-            self.prod_program.input(inp)
-        except bf.ProgramFinishedError:
-            if self.prod_program.result != bf.Result.SUCCESS:
-                self.prod_rewards = [self.syntax_error_reward]
-                self.reprogram()
-                self.input(inp)
-            else:
-                raise
+        while True:
+            try:
+                self.prod_program.input(inp)
+                return
+            except bf.ProgramFinishedError:
+                if self.prod_program.result != bf.Result.SUCCESS:
+                    self.prod_rewards = [self.syntax_error_reward]
+                    self.reprogram()
+                else:
+                    raise
 
     def act(self):
         try:
