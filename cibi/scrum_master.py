@@ -99,16 +99,15 @@ class ScrumMaster(Agent):
                     raise
 
     def act(self):
-        try:
-            action = self.prod_program.act()
-            return action
-        except bf.ProgramFinishedError:
-            if self.prod_program.result != bf.Result.SUCCESS:
-                self.prod_rewards = [self.syntax_error_reward]
-                self.reprogram()
-                return self.act()
-            else:
-                raise
+        while True:
+            try:
+                return self.prod_program.act()
+            except bf.ProgramFinishedError:
+                if self.prod_program.result != bf.Result.SUCCESS:
+                    self.prod_rewards = [self.syntax_error_reward]
+                    self.reprogram()
+                else:
+                    raise
 
     def retrospective(self):
         """Give the developers feedback on his code and archive said code"""
