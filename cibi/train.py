@@ -69,8 +69,14 @@ def run_experiments(logdir):
         hardcoded_path = os.path.join(get_project_dir('codebases'), config['seed'])
         custom_path = os.path.join(logdir, config['seed'])
         
-        seed = hardcoded_path if os.path.isfile(hardcoded_path) else custom_path
-        logger.info(f'Taking programs from {seed} as gospel')
+        if os.path.isfile(hardcoded_path):
+            seed = hardcoded_path
+        elif os.path.isfile(custom_path):
+            seed = custom_path
+        else:
+            err = f"Seed codebase {config['seed']} not found"
+            logger.error(err)
+            raise FileNotFoundError(err)
 
     try:
         with open(os.path.join(logdir, 'summary.yml'), 'r') as f:

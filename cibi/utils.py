@@ -204,7 +204,10 @@ def get_dir_out_of_the_way(path):
 
 def get_project_dir(dir):
   import os
-  return os.path.join(*(os.path.split(__file__)[:-2] + (dir,)))
+  # https://stackoverflow.com/questions/3167154/how-to-split-a-dos-path-into-its-components-in-python
+  path_components = os.path.normpath(__file__).split(os.path.sep)
+  project_dir = os.path.join(*(['/'] + path_components[:-2] + [dir,]))
+  return project_dir
 
 def parse_config_string(config_str):
   config = {}
