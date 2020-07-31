@@ -250,10 +250,10 @@ class SeniorDeveloper(object):
     self.set_language(language)
 
     with self.graph.as_default():
-      summary_writer = tf.summary.FileWriter(events_dir) if events_dir else None
+      summary_writer = tf.summary.FileWriter(os.path.join(events_dir, self.name)) if events_dir else None
 
       sv = tf.train.Supervisor( is_chief=is_chief,
-                                logdir=log_dir,
+                                logdir=os.path.join(log_dir, self.name),
                                 saver=self.saver,
                                 summary_op=None,
                                 init_op=self.global_init_op,
