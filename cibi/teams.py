@@ -13,5 +13,12 @@ from cibi.lm import LanguageModel
 teams = [
     [SeniorDeveloper({}, LanguageModel)],
     [SeniorDeveloper({}, LanguageModel), JuniorDeveloper()],
-    [JuniorDeveloper()]   
+    [JuniorDeveloper()],
+    [SeniorDeveloper({'policy_lstm_sizes': [10]}, LanguageModel, name='senior10'), 
+     SeniorDeveloper({'policy_lstm_sizes': [50]}, LanguageModel, name='senior50'), 
+     SeniorDeveloper({'policy_lstm_sizes': [256]}, LanguageModel, name='senior256'),
+     SeniorDeveloper({'policy_lstm_sizes': [10,10]}, LanguageModel, name='senior10-10'), 
+     SeniorDeveloper({'policy_lstm_sizes': [50,50]}, LanguageModel, name='senior50-50'), 
+     SeniorDeveloper({'policy_lstm_sizes': [256,256]}, LanguageModel, name='senior256-256'),
+     JuniorDeveloper()],
 ]
