@@ -9,7 +9,10 @@ def status_cmd(exp_dir):
     exp_dir = os.path.split(os.path.realpath(exp_dir))
     experiments = get_status(os.path.join(*exp_dir[:-1]), exp_dir[-1])
     index, records = zip(*experiments)
-    print(pd.DataFrame.from_records(records, index=index).to_string())
+    
+    status_table = pd.DataFrame.from_records(records, index=index)
+    print(status_table.to_string())
+    status_table.to_pickle(os.path.join(*(exp_dir + ('status.pickle',))))
 
 def get_status(parent_dir, exp_name):
     exp_dir = os.path.join(parent_dir, exp_name)
