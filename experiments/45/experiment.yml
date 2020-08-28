@@ -1,0 +1,6 @@
+env: LunarLanderContinuous-v2
+max-sprints-without-improvement: 10000
+team: 3
+allowed-commands: "@><^+-[].,!~01234abcde"
+scrum:
+    syntax_error_reward: -500
