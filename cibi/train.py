@@ -114,22 +114,22 @@ def run_experiments(logdir):
     seed_codebase = make_seed_codebase(seed, env, observation_discretizer, action_sampler)
 
     failed_sprints = 0
-    sprints_without_improvement = 0
+    sprints_of_last_improvement = 0
     with hire_team(team, env, observation_discretizer, action_sampler, language,
                 train_dir, events_dir, scrum_config, seed_codebase) as agent:
+        max_episode_length = config.get('max-episode-length', max_sprints * agent.sprint_length)
+
         while (agent.sprints_elapsed < max_sprints 
-           and sprints_without_improvement < max_sprints_without_improvement):
+           and summary['sprints_elapsed'] - sprints_of_last_improvement < max_sprints_without_improvement):
             try:
-                rollout = agent.attend_gym(env, max_reps=None, render=render)
+                rollout = agent.attend_gym(env, max_reps=max_episode_length, render=render)
 
                 episode_length = len(rollout)
                 summary['shortest_episode'] = min(summary['shortest_episode'], episode_length)
                 summary['longest_episode'] = max(summary['longest_episode'], episode_length)
                 if summary['max_total_reward'] < rollout.total_reward:
-                    sprints_without_improvement = 0
+                    sprints_without_improvement = agent.sprints_elapsed
                     summary['max_total_reward'] = float(rollout.total_reward)
-                else:
-                    sprints_without_improvement += 1
                     
                 summary['sprints_elapsed'] = agent.sprints_elapsed
                 summary['seconds_elapsed'] = time.monotonic() - start_time
