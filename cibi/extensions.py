@@ -1,4 +1,5 @@
 import gym
+from heartpole import HeartPole
 
 class TaxiEnvMultiDiscrete(gym.Env):
     def __init__(self):
@@ -22,7 +23,8 @@ class TaxiEnvMultiDiscrete(gym.Env):
         return self.openai_gym.render(*args, **kwargs)
 
 extensions = {
-    'Taxi-v3mod': TaxiEnvMultiDiscrete
+    'Taxi-v3mod': TaxiEnvMultiDiscrete,
+    'HeartPole-v0': HeartPole
 }
 
 def make_gym(gym_name):
