@@ -10,6 +10,13 @@ def status_cmd(exp_dir):
     experiments = get_status(os.path.join(*exp_dir[:-1]), exp_dir[-1])
     index, records = zip(*experiments)
     
+    try:
+        # If experiment names are integers, we want them sorted as integers, not alphabetically
+        index = [int(i) for i in index]
+    except ValueError:
+        # However, they don't have to be integers
+        pass
+
     status_table = pd.DataFrame.from_records(records, index=index)
     print(status_table.sort_index().to_string())
     status_table.to_pickle(os.path.join(*(exp_dir + ('status.pickle',))))
