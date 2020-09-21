@@ -46,6 +46,8 @@ def run_experiments(logdir):
         config = yaml.load(f)
         config_hash = calc_hash(config)
 
+    assert cibi.__version__.startswith(str(config.get('cibi-version', '')))
+
     render = config.get('render', False)
     discretization_config = config.get('discretization', {})
     scrum_config = config.get('scrum', {}).copy()
