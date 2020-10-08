@@ -1,6 +1,0 @@
-env: Taxi-v3mod
-max-sprints-without-improvement: 50000
-team: 2
-seed: taxi3.txt
-scrum:
-    syntax_error_reward: -200

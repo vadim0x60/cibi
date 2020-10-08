@@ -1,6 +1,0 @@
-env: MountainCarContinuous-v0
-max-sprints-without-improvement: 10000
-team: 0
-allowed-commands: "@><^+-[].,!~"
-scrum:
-    syntax_error_reward: -200

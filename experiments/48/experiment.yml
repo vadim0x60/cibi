@@ -1,6 +1,0 @@
-env: HeartPole-v0
-max-sprints-without-improvement: 3000
-max-episode-length: 3000
-team: 3
-scrum:
-    syntax_error_reward: -10000
