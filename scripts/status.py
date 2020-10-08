@@ -3,6 +3,8 @@ import os
 import yaml
 import pandas as pd
 
+from cibi.utils import calc_hash
+
 @click.command()
 @click.argument('exp_dir')
 def status_cmd(exp_dir):
@@ -57,7 +59,19 @@ def get_status(parent_dir, exp_name):
 
             try:
                 with open(summary_path) as summary_f:
-                    mtr = yaml.safe_load(summary_f)['max_total_reward']
+                    summary = yaml.safe_load(summary_f)
+                    experiment_hash = summary.get('experiment', None)
+
+                    # When the experiment config is edited, all result files indicate
+                    # the reuslts of a wrong experiment. The hash is used to warn about it:
+                    if experiment_hash:
+                        if experiment_hash != calc_hash(experiment):
+                            status = 'RESTART NEEDED'
+                    else:
+                        # Older versions of cibi didn't have hash, so we can't be sure
+                        status += '?'
+
+                    mtr = summary['max_total_reward']
             except yaml.YAMLError:
                 pass
 
