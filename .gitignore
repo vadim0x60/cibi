@@ -108,9 +108,11 @@ dmypy.json
 
 # End of https://www.gitignore.io/api/python
 
-#logdir
-log
-
 # I tend to use jupyter notebooks as a non-archival temporary way to test ideas
 *.ipynb
 .ipynb_checkpoints
+
+# Sample experiment results
+sample_experiment/log.log
+sample_experiment/programs.pickle
+sample_experiment/summary.yml
