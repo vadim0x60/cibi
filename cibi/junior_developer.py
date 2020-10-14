@@ -72,7 +72,7 @@ class RefactoringLever():
         codebase = make_dev_codebase()
         metadata = {'method': self.name, 
                     'parent1': code}
-        codebase.commit(language['prune'](code))
+        codebase.commit(language['prune'](code), metadata=metadata)
         return codebase
 
 def cx_with_number_arrays(language, crossover_over_numbers):
