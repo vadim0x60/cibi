@@ -304,12 +304,13 @@ def make_bf_plus(allowed_commands=DEFAULT_CMD_SET):
 class Executable(Agent):
   def __init__(self, code, observation_discretizer, action_sampler,
                language=make_bf_plus(),
-               log_prob=None,
+               metrics={}, metadata={},
                init_memory=None, null_value=0,
                max_steps=2 ** 12, require_correct_syntax=True, debug=False,
                cycle = False):
     self.code = code
-    self.log_prob = log_prob
+    self.metrics = metrics
+    self.metadata = metadata
     self.alphabet = language['alphabet']
 
     code = list(code)

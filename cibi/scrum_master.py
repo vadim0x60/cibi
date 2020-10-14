@@ -63,19 +63,15 @@ class ScrumMaster(Agent):
         if self.prod_rewards:
             q = sum(self.prod_rewards)
 
-            metrics = {
-                'test_quality': q,
-                'replay_weight': exp(q / self.replay_temperature),
-                'log_prob': self.prod_program.log_prob
-            }
+            self.prod_program.metrics['test_quality'] = q
+            self.prod_program.metrics['replay_weight'] = exp(q / self.replay_temperature)
 
-            metadata = {
-                'result': self.prod_program.result,
-                'author': self.lead_developer.name
-            }
+            self.prod_program.metadata['result'] = self.prod_program.result
+            self.prod_program.metadata['author'] = self.lead_developer.name
 
             self.feedback_branch.commit(self.prod_program.code, 
-                                        metrics=metrics, metadata=metadata)
+                                        metrics=self.prod_program.metrics, 
+                                        metadata=self.prod_program.metadata)
             
             self.prod_rewards = []
             self.prod_program = None
@@ -153,7 +149,7 @@ class ScrumMaster(Agent):
 
         # Compile it (might get syntax errors, our developer doesn't check for that)
         self.prod_program = bf.Executable(code,
-                                          log_prob=metrics['log_prob'],
+                                          metrics=metrics, metadata=metadata,
                                           observation_discretizer=self.observation_discretizer, 
                                           action_sampler=self.action_sampler,
                                           cycle=self.cycle_programs)
