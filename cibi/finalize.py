@@ -11,7 +11,7 @@ from cibi import bf
 @click.argument('logdir', type=click.Path())
 def finalize_training(logdir):
     with open(os.path.join(logdir, 'experiment.yml'), 'r') as f:
-        config = yaml.load(f)
+        config = yaml.safe_load(f)
     discretization_config = config.get('discretization', {})
     codebase_file = os.path.join(logdir, 'programs.pickle')
 

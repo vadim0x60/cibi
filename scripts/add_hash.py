@@ -21,10 +21,10 @@ def add_hash(exp_dir):
 
     if os.path.exists(summary_path) and os.path.exists(experiment_path):
         with open(summary_path, 'r') as summary_f:
-            summary = yaml.load(summary_f)
+            summary = yaml.safe_load(summary_f)
 
         with open(experiment_path, 'r') as experiment_f:
-            experiment = yaml.load(experiment_f)
+            experiment = yaml.safe_load(experiment_f)
 
         with open(summary_path, 'w') as summary_f:
             summary['experiment'] = calc_hash(experiment)
