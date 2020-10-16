@@ -251,3 +251,9 @@ def retry(f, test=lambda x: True, attempts=3, exceptions=BaseException):
 
     return f(*args, **kwargs)
   return f_with_retries
+
+def update_keys(dictionary, f):
+    if type(dictionary) is dict:
+        return {f(key): update_keys(val, f) for key, val in dictionary.items()}
+    else:
+        return dictionary

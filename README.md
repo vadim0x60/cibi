@@ -77,21 +77,21 @@ An example that specifies everything that can be specified:
 
 ```
 env: HeartPole
+cibi-version: 3
 max-sprints: 1000000
 max-sprints-without-improvement: 10000
 team: 0
 allowed-commands: "@><^+-[].,!~01234"
 seed: heartpole.txt
-scrum:
-    syntax_error_reward: -200
-    sprint_length: 100
-    stretch_sprints: false
+syntax_error_reward: -200
+sprint_length: 100
+stretch_sprints: false
 max-episode-length: 10000
 ```
 
 `max-sprints` sets the absolute number of sprints after which training will end. In this case, no more than 4000000 (`max-sprints`) programs will be written since our batch size is 4. `max-sprints-without-improvement` lets you set early stopping
 
-`allowed-commands` let's you use a subset of BF++ instead of the full language
+`allowed-commands` lets you use a subset of BF++ instead of the full language
 
 `seed` let's you use programs you already have to jumpstart the training (the seed file has to be in `EXPERIMENT_DIR` or in `codebases`)
 
@@ -113,13 +113,15 @@ If the training process was killed (intentionally or not), it can be resumed wit
 After the training finishes, there will be several files in `EXPERIMENT_DIR`, the most important one being `top.pickle` containing 256 best programs. It is a pandas dataframe to be loaded with `pandas.read_pickle()` with programs and some metadata including their `test_quality` - total episode reward averaged over 100 episodes. `programs.pickle` contains all programs written in the process of getting to the best ones, `log.log` is what you'd expect from a log file, `train` folder contains model checkpoints, and `summary.yml` is a short summary of experiment status:
 
 ```
-cibi_version: '2.6'
+cibi_version: '3.0'
 longest_episode: 42
 max_total_reward: 42.0
 seconds_elapsed: 16467.135838000104
 shortest_episode: 8
 sprints_elapsed: 100000
 ```
+
+A sample experiment can be found in the `sample experiment` folder. Experiments we ran for our paper can be found [in a separated repo](https://github.com/vadim0x60/cibi-experiments).
 
 ## Codebases
 
@@ -145,19 +147,3 @@ a
 ```
 
 If it's stuck at a wall, it does nothing to unstuck itself - a fatal flaw fixed by the program synthesis system.
-
-## Experiments
-
-`experiments` folder contains experiments with `CartPole-v1` (0-3), `MountainCarContinuous-v0` (4-7), `Taxi-v3` (8-11), we've done for our NeurIPS submission
-
-Re-run them with `python cibi/train.py experiments/NUMBER` or download our results with `python cibi/download.py`
-
-Total episode reward achieved by resulting programs, averaged over 100 episodes:
-
-| Environment     | CartPole     | Mountain Car | Taxi |
-| ------ | ------ | ------- | ------ |
-| expert BF++, no training | -17.96 | -2.79 | -209 |
-| BF+ (without shorthands) | 41.43 | 71.49 | -161.31 |
-| BF+ (without `@^~`)     | 44.25 | 5.67 | -199.86 |
-| BF++     | 53.45       | 68.95 | -199.83 |
-| BF++ with expert seed  | 61.96 | 68.82 | -83.17 |

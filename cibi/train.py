@@ -9,7 +9,7 @@ import traceback
 
 import cibi
 from cibi import bf
-from cibi.utils import ensure_enough_test_runs, get_project_dir, calc_hash
+from cibi.utils import ensure_enough_test_runs, get_project_dir, calc_hash, update_keys
 from cibi.codebase import make_prod_codebase
 from cibi.extensions import make_gym
 from cibi.teams import teams
@@ -43,14 +43,19 @@ def make_seed_codebase(seed_file, env, observation_discretizer, action_sampler):
 @click.argument('logdir', type=str)
 def run_experiments(logdir):
     with open(os.path.join(logdir, 'experiment.yml'), 'r') as f:
-        config = yaml.load(f)
+        config = yaml.safe_load(f)
         config_hash = calc_hash(config)
 
-    assert cibi.__version__.startswith(str(config.get('cibi-version', '')))
+    required_version = str(config['cibi-version'])
+    assert cibi.__version__.startswith(required_version)
 
     render = config.get('render', False)
     discretization_config = config.get('discretization', {})
-    scrum_config = config.get('scrum', {}).copy()
+
+    scrum_keys = ['sprint-length', 'stretch-sprints',
+                  'cycle-programs', 'syntax-error-reward', 'replay-temperature']
+    scrum_config = {key.replace('-', '_'): config[key] for key in scrum_keys if key in config}
+
     max_failed_sprints = config.get('max-failed-sprints', 3)
     max_sprints = config.get('max-sprints', 1000000)
     max_sprints_without_improvement = config.get('max-sprints-without-improvement', 1000000)
@@ -82,7 +87,7 @@ def run_experiments(logdir):
 
     try:
         with open(os.path.join(logdir, 'summary.yml'), 'r') as f:
-            summary = yaml.load(f)
+            summary = yaml.safe_load(f)
             if 'experiment' in summary and config_hash != summary['experiment']:
                 summary = None
     except FileNotFoundError as e:
@@ -90,17 +95,17 @@ def run_experiments(logdir):
       
     if summary is None:
         summary = {
-            'shortest_episode': float('inf'),
-            'longest_episode': 0,
-            'sprints_elapsed': 0,
-            'seconds_elapsed': 0,
-            'max_total_reward': float('-inf'),
+            'shortest-episode': float('inf'),
+            'longest-episode': 0,
+            'sprints-elapsed': 0,
+            'seconds-elapsed': 0,
+            'max-total-reward': float('-inf'),
             'experiment': config_hash
         }
     
-    summary['cibi_version'] = cibi.__version__
-    scrum_config['sprints_elapsed'] = summary['sprints_elapsed']
-    start_time -= summary['seconds_elapsed']
+    summary['cibi-version'] = cibi.__version__
+    scrum_config['sprints_elapsed'] = summary['sprints-elapsed']
+    start_time -= summary['seconds-elapsed']
 
     train_dir = os.path.join(logdir, 'train')
     events_dir = os.path.join(logdir, 'events')
@@ -122,19 +127,18 @@ def run_experiments(logdir):
         max_episode_length = config.get('max-episode-length', max_sprints * agent.sprint_length)
 
         while (agent.sprints_elapsed < max_sprints 
-           and summary['sprints_elapsed'] - sprints_of_last_improvement < max_sprints_without_improvement):
+           and summary['sprints-elapsed'] - sprints_of_last_improvement < max_sprints_without_improvement):
             try:
                 rollout = agent.attend_gym(env, max_reps=max_episode_length, render=render)
 
                 episode_length = len(rollout)
-                summary['shortest_episode'] = min(summary['shortest_episode'], episode_length)
-                summary['longest_episode'] = max(summary['longest_episode'], episode_length)
-                if summary['max_total_reward'] < rollout.total_reward:
-                    sprints_without_improvement = agent.sprints_elapsed
-                    summary['max_total_reward'] = float(rollout.total_reward)
+                summary['shortest-episode'] = min(summary['shortest-episode'], episode_length)
+                summary['longest-episode'] = max(summary['longest-episode'], episode_length)
+                if summary['max-total-reward'] < rollout.total_reward:
+                    summary['max-total-reward'] = float(rollout.total_reward)
                     
-                summary['sprints_elapsed'] = agent.sprints_elapsed
-                summary['seconds_elapsed'] = time.monotonic() - start_time
+                summary['sprints-elapsed'] = agent.sprints_elapsed
+                summary['seconds-elapsed'] = time.monotonic() - start_time
 
                 with open(os.path.join(logdir, 'summary.yml'), 'w') as f:
                     yaml.dump(summary, f)
