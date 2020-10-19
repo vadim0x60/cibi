@@ -10,5 +10,8 @@ a[e>-a-]b[e>>-b-]
 # Move using the relative destination
 e>>>4+e---[e>>>4e0]e>[>>0e>0]e>~[>>1e>0]e>>[>2e>>0]e>>~[>3e>>0]>!
 
+# Move randomly
+a,e>>>>>+!
+
 # Move back to a
 a
