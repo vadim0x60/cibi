@@ -1,3 +1,5 @@
+# Program 1: move to destination, no obstacle avoidance
+
 # Memory map
 # [T T Pid Did _ _ _ _]
 
@@ -21,3 +23,46 @@ e>>>4e--[e>>>+e0]e>[>>0e>0]e>~[>>1e>0]e>>[>2e>>0]e>>~[>3e>>0]>!
 
 # Move back to a
 a
+
+============================================================================
+
+# Program 2: 5 steps to destination, 5 random steps
+
+# Memory map
+# [T T Pid Did _ _ _ _ _ steps_left]
+
+# Set steps_left counter to 5 
+e>>>>>4+
+
+# Start loop
+[
+
+# Destination derivation
+e1[e+>0>0e^[e>0>4e^-e>>>>0]e^[e>4>0e^-e>>>>0]e^[e>4>3e^-e>>>>0]e^]
+
+# Memory map
+# [T T 0 Did|0 id_pointer D D _ 0]
+
+# Absolute destination to relative destination
+a[e>-a-]b[e>>-b-]
+
+# Memory map
+# [0 0 0 Did|0 id_pointer D_rel D_rel _ 0]
+
+# Move using the relative destination
+e>>>4e--[e>>>+e0]e>[>>0e>0]e>~[>>1e>0]e>>[>2e>>0]e>>~[>3e>>0]>!
+
+# Memory map
+# [0 0 0 Did|0 0 D_rel D_rel A_plan 0]
+
+# Write observation to a
+a,
+
+# Decrement steps_left
+e>>>>>-
+
+# Loop
+]a
+
+# 5 random steps
+@.@.@.@.@.,,,,
