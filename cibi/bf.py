@@ -467,16 +467,21 @@ class Executable(Agent):
       self.step()
 
   def input(self, inp):
+    if self.state == State.NOT_STARTED:
+      # Execution usually starts with an input
+      # We don't want to lose this input
+      self.state = State.AWAITING_INPUT
+
     while self.state != State.AWAITING_INPUT:
       self.execute()
-
-    self.state = State.EXECUTING
-    self.record_snapshot(',')
 
     self.write(self.observation_discretizer(inp))
 
     self.codeptr += 1
     self.steps = 0
+
+    self.state = State.EXECUTING
+    self.record_snapshot(',')
 
   def act(self):
     action = self.action_sampler.sample(self.action_stack)
