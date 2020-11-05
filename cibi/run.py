@@ -10,6 +10,11 @@ class ExecutionError(Exception):
         super().__init__()
         self.result = result
 
+def print_list(lname, l):
+    print(lname)
+    for elem in l:
+        print(elem)
+
 def run_episode(env, code, observation_discretizer, action_sampler, render=False, debug=False):
     executable = bf.Executable(code, observation_discretizer, action_sampler, cycle=True, debug=debug)
         
@@ -22,10 +27,11 @@ def run_episode(env, code, observation_discretizer, action_sampler, render=False
         pass
 
     if debug:
-        print(f'Trace: {executable.program_trace}')
-        print(f'Observation trace: {observation_discretizer.trace}')
-        print(f'Action trace: {action_sampler.trace}')
+        print_list('Trace:', executable.program_trace)
+        print_list('Observation trace:', observation_discretizer.trace)
+        print_list('Action trace:', action_sampler.trace)
         print(f'Total reward {rollout.total_reward}')
+        
     return rollout
 
 def average(coll):
