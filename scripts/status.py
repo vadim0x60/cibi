@@ -60,18 +60,21 @@ def get_status(parent_dir, exp_name):
             try:
                 with open(summary_path) as summary_f:
                     summary = yaml.safe_load(summary_f)
-                    experiment_hash = summary.get('experiment', None)
-
-                    # When the experiment config is edited, all result files indicate
-                    # the reuslts of a wrong experiment. The hash is used to warn about it:
-                    if experiment_hash:
-                        if experiment_hash != calc_hash(experiment):
-                            status = 'RESTART NEEDED'
+                    if not summary['cibi_version'].startswith('3'):
+                        status = 'RESTART NEEDED'
                     else:
-                        # Older versions of cibi didn't have hash, so we can't be sure
-                        status += '?'
+                        experiment_hash = summary.get('experiment', None)
 
-                    mtr = summary['max_total_reward']
+                        # When the experiment config is edited, all result files indicate
+                        # the reuslts of a wrong experiment. The hash is used to warn about it:
+                        if experiment_hash:
+                            if experiment_hash != calc_hash(experiment):
+                                status = 'RESTART NEEDED'
+                        else:
+                            # Older versions of cibi didn't have hash, so we can't be sure
+                            status += '?'
+
+                        mtr = summary['max_total_reward']
             except yaml.YAMLError:
                 pass
 
