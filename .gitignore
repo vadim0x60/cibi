@@ -116,6 +116,7 @@ dmypy.json
 sample_experiment/log.log
 sample_experiment/programs.pickle
 sample_experiment/summary.yml
+sample_experiment/events
 
 # Editor settings
 .vscode

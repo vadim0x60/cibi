@@ -9,6 +9,8 @@ import numpy as np
 
 from collections import OrderedDict
 import re
+import os
+import yaml
 import random
 
 import logging
@@ -131,6 +133,39 @@ class JuniorDeveloper():
         self.t = 0
         self.gamma = None
 
+    def try_dump_state(self):
+        if not self.state_file:
+            return
+
+        os.makedirs(os.path.dirname(self.state_file), exist_ok=True)
+
+        with open(self.state_file, 'w') as f:
+            state = {
+                'k': self.k,
+                'value_estimates': self.value_estimates.tolist(), 
+                'action_attempts': self.action_attempts.tolist(), 
+                't': self.t, 
+                'gamma': self.gamma
+            }
+            yaml.dump(state, f)
+
+    def try_load_state(self):
+        if not self.state_file:
+            return
+
+        try:
+            with open(self.state_file, 'r') as f:
+                state = yaml.safe_load(f)
+
+                self.k = state['k']
+                self.value_estimates = np.array(state['value_estimates'])
+                self.action_attempts = np.array(state['action_attempts'])
+                self.t = state['t']
+                self.gamma = state['gamma']
+
+        except OSError:
+            pass
+
     def write_programs(self, inspiration_branch):
         action_idx = self.policy.choose(self)
         action = self.actions[action_idx]
@@ -160,7 +195,11 @@ class JuniorDeveloper():
             self.t += 1
             # END REMIX
 
+        self.try_dump_state()
+
     def hire(self, language, log_dir=None, events_dir=None, is_chief=True):
+        self.state_file = os.path.join(events_dir, f'{self.name}.yml') if events_dir else None
+        self.try_load_state()
         self.language = language
         return self
 
