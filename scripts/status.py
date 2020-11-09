@@ -76,7 +76,7 @@ def get_status(parent_dir, exp_name):
                             # Older versions of cibi didn't have hash, so we can't be sure
                             status += '?'
 
-                        mtr = summary['max-total-reward']
+                    mtr = summary['max-total-reward']
             except yaml.YAMLError:
                 pass
 
