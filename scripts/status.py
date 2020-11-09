@@ -23,12 +23,6 @@ def status_cmd(exp_dir):
     print(status_table.sort_index().to_string())
     status_table.to_pickle(os.path.join(*(exp_dir + ('status.pickle',))))
 
-def version(summary):
-    try:
-        return summary['cibi-version']
-    except KeyError:
-        return summary['cibi_version']
-
 def get_status(parent_dir, exp_name):
     exp_dir = os.path.join(parent_dir, exp_name)
     if not os.path.isdir(exp_dir):
@@ -66,7 +60,9 @@ def get_status(parent_dir, exp_name):
             try:
                 with open(summary_path) as summary_f:
                     summary = yaml.safe_load(summary_f)
-                    if not version(summary).startswith('3'):
+                    summary = {key.replace('_', '-'): summary[key] for key in summary.keys()}
+
+                    if not summary['cibi-version'].startswith('3'):
                         status = 'RESTART NEEDED'
                     else:
                         experiment_hash = summary.get('experiment', None)
@@ -80,7 +76,7 @@ def get_status(parent_dir, exp_name):
                             # Older versions of cibi didn't have hash, so we can't be sure
                             status += '?'
 
-                        mtr = summary['max_total_reward']
+                        mtr = summary['max-total-reward']
             except yaml.YAMLError:
                 pass
 
