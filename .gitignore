@@ -115,6 +115,8 @@ dmypy.json
 # Sample experiment results
 sample_experiment/log.log
 sample_experiment/programs.pickle
+sample_experiment/top.pickle
+sample_experiment/status.pickle
 sample_experiment/summary.yml
 sample_experiment/events
 
