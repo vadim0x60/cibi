@@ -46,6 +46,7 @@ def get_status(parent_dir, exp_name):
     if os.path.exists(experiment_path):
         status = 'NOT STARTED'
         mtr = None
+        score = None
 
         with open(experiment_path) as experiment_f:
             experiment = yaml.safe_load(experiment_f)
@@ -54,6 +55,10 @@ def get_status(parent_dir, exp_name):
         if os.path.exists(summary_path):
             if os.path.exists(top_path):
                 status = 'FINISHED'
+                
+                with open(top_path, 'rb') as top_f:
+                    top_codebase = pd.read_pickle(top_f)
+                    score = top_codebase['test_quality'].max()
             else:
                 status = 'IN PROGRESS'
 
@@ -82,6 +87,7 @@ def get_status(parent_dir, exp_name):
 
         experiment['mtr'] = mtr
         experiment['status'] = status
+        experiment['score'] = score
     return experiments
 
 if __name__ == '__main__':
