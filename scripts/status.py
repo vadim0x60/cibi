@@ -22,6 +22,7 @@ def status_cmd(exp_dir):
     status_table = pd.DataFrame.from_records(records, index=index)
     print(status_table.sort_index().to_string())
     status_table.to_pickle(os.path.join(*(exp_dir + ('status.pickle',))))
+    status_table.to_latex(os.path.join(*(exp_dir + ('status.tex',))))
 
 def get_status(parent_dir, exp_name):
     exp_dir = os.path.join(parent_dir, exp_name)
