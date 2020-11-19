@@ -56,7 +56,7 @@ def run_experiments(logdir):
                   'cycle-programs', 'syntax-error-reward', 'replay-temperature']
     scrum_config = {key.replace('-', '_'): config[key] for key in scrum_keys if key in config}
 
-    max_failed_sprints = config.get('max-failed-sprints', 3)
+    max_failed_sprints = config.get('max-failed-sprints', 10)
     max_sprints = config.get('max-sprints', 1000000)
     max_sprints_without_improvement = config.get('max-sprints-without-improvement', 1000000)
     os.makedirs(logdir, exist_ok=True)
