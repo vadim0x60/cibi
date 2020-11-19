@@ -2,8 +2,6 @@ import os
 import shutil
 import click
 
-from cibi.utils import get_project_dir
-
 def parse_ranges(ranges):
     for r in ranges.split(','):
         limits = r.split('-')
@@ -18,9 +16,11 @@ def parse_ranges(ranges):
 @click.argument('exp_dir', type=str)
 @click.argument('ids', type=str)
 def duplicate_experiments(exp_dir, ids):
-    max_experiment_id = max(*(int(idx) for idx in os.listdir(exp_dir)))
+    max_experiment_id = 0
     for idx in parse_ranges(ids):
-        max_experiment_id += 1
+        while os.path.isdir(os.path.join(exp_dir, str(max_experiment_id))):
+            max_experiment_id += 1
+
         shutil.copytree(os.path.join(exp_dir, str(idx)),
                         os.path.join(exp_dir, str(max_experiment_id)))
 
