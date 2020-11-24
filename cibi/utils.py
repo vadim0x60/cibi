@@ -19,6 +19,24 @@ import tensorflow as tf
 import logging
 logger = logging.getLogger(f'cibi.{__file__}')
 
+import cibi
+
+def trusted_version(experiment_summary):
+  if 'cibi-version' not in experiment_summary:
+    return False
+
+  real_version = [int(x) for x in experiment_summary['cibi-version'].split('.')]
+  trusted_version = [int(x) for x in cibi.__trust_version__.split('.')]
+  
+  for real,expected in zip(real_version, trusted_version):
+    if real > expected:
+      return True
+    if real < expected:
+      return False
+
+  # real = expected
+  return True
+
 def with_graph(graph):
   def with_this_graph(method):
     @functools.wraps(method)

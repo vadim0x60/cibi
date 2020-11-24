@@ -3,7 +3,7 @@ import os
 import yaml
 import pandas as pd
 
-from cibi.utils import calc_hash
+from cibi.utils import calc_hash, trusted_version
 
 @click.command()
 @click.argument('exp_dir')
@@ -68,19 +68,8 @@ def get_status(parent_dir, exp_name):
                     summary = yaml.safe_load(summary_f)
                     summary = {key.replace('_', '-'): summary[key] for key in summary.keys()}
 
-                    if not summary['cibi-version'].startswith('3'):
+                    if not trusted_version(summary) or summary['experiment'] != calc_hash(experiment):
                         status = 'RESTART NEEDED'
-                    else:
-                        experiment_hash = summary.get('experiment', None)
-
-                        # When the experiment config is edited, all result files indicate
-                        # the reuslts of a wrong experiment. The hash is used to warn about it:
-                        if experiment_hash:
-                            if experiment_hash != calc_hash(experiment):
-                                status = 'RESTART NEEDED'
-                        else:
-                            # Older versions of cibi didn't have hash, so we can't be sure
-                            status += '?'
 
                     mtr = summary['max-total-reward']
             except yaml.YAMLError:

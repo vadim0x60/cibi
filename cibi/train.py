@@ -10,7 +10,7 @@ import traceback
 import cibi
 from cibi import bf
 from cibi import bf_io
-from cibi.utils import ensure_enough_test_runs, get_project_dir, calc_hash, update_keys
+from cibi.utils import ensure_enough_test_runs, get_project_dir, calc_hash, update_keys, trusted_version
 from cibi.codebase import make_prod_codebase
 from cibi.extensions import make_gym
 from cibi.teams import teams
@@ -87,8 +87,14 @@ def run_experiments(logdir):
 
     try:
         with open(os.path.join(logdir, 'summary.yml'), 'r') as f:
+            # This is an attempt to continue a previously trusted experiment
             summary = yaml.safe_load(f)
+
             if 'experiment' in summary and config_hash != summary['experiment']:
+                # Experiment params changed, need to start from scratch
+                summary = None
+            if not trusted_version(summary):
+                # Important bug has been fixed since previous run, need to start from scratch
                 summary = None
     except FileNotFoundError as e:
         summary = None
