@@ -7,13 +7,14 @@ from __future__ import print_function
 import tensorflow as tf
 import gym.spaces as s
 from cibi import bf  # brain coder
+from cibi import bf_io
 from cibi.bf import Executable, ProgramFinishedError
 
 action_space = s.Discrete(1024)
 observation_space = s.Discrete(1024)
 
-observation_discretizer = bf.ObservationDiscretizer(observation_space, history_length=None)
-action_sampler = bf.ActionSampler(action_space)
+observation_discretizer = bf_io.ObservationDiscretizer(observation_space, history_length=None)
+action_sampler = bf_io.ActionSampler(action_space)
 
 def shorten(seq, size_limit=20, head_size=5, tail_size=5):
   if len(seq) < size_limit:
@@ -142,11 +143,11 @@ class BfTest(tf.test.TestCase):
         agent.program_trace)
 
   def testStreamDiscretizer(self):
-    discretize = bf.StreamDiscretizer([0, 1])
+    discretize = bf_io.StreamDiscretizer([0, 1])
     self.assertEqual([discretize(x) for x in [-1, 0, 0.5, 1, 1.5]], [0, 1, 1, 2, 2])
 
   def testFluidStreamDiscretizer(self):
-    discretize = bf.FluidStreamDiscretizer(bin_count=3, history_length=2)
+    discretize = bf_io.FluidStreamDiscretizer(bin_count=3, history_length=2)
     print(discretize.thresholds)
     discretize(5)
     discretize(6)

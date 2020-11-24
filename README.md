@@ -18,11 +18,12 @@ This is done with `cibi/run.py` and `cibi/train.py` respectively
 
 ## Requirements
 
+The main prerequisite is Python 3.0-3.7 (we use a version of Tensorsflow incompatible with Python 3.8 and above, feel free to rewrite everything in modern Tensorsflow and pull request)
 Before using `run.py` and `train.py` commands, install the requirements and `cibi` itself:
 
 ```
-pip install -r requirements.txt
-pip install -e .
+pip3 install -r requirements.txt
+pip3 install -e .
 ```
 
 ## Environments

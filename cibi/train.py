@@ -9,12 +9,12 @@ import traceback
 
 import cibi
 from cibi import bf
+from cibi import bf_io
 from cibi.utils import ensure_enough_test_runs, get_project_dir, calc_hash, update_keys
 from cibi.codebase import make_prod_codebase
 from cibi.extensions import make_gym
 from cibi.teams import teams
 from cibi.scrum_master import hire_team
-from cibi.stream_discretizer import burn_in
 
 logging.basicConfig(format='%(asctime)s %(message)s')
 logger = logging.getLogger('cibi')
@@ -110,14 +110,14 @@ def run_experiments(logdir):
     train_dir = os.path.join(logdir, 'train')
     events_dir = os.path.join(logdir, 'events')
 
-    observation_discretizer = bf.ObservationDiscretizer(env.observation_space, 
-                                                        history_length=discretization_config.get('history', 1024),
-                                                        force_fluid=discretization_config.get('force-history', False))
-    action_sampler = bf.ActionSampler(env.action_space)
+    observation_discretizer = bf_io.ObservationDiscretizer(env.observation_space, 
+                                                           history_length=discretization_config.get('history', 1024),
+                                                           force_fluid=discretization_config.get('force-history', False))
+    action_sampler = bf_io.ActionSampler(env.action_space)
     language = bf.make_bf_plus(config.get('allowed-commands', bf.DEFAULT_CMD_SET))
 
     random_agent = bf.Executable('@!', observation_discretizer, action_sampler, cycle=True, debug=False)
-    burn_in(env, random_agent, observation_discretizer, action_sampler)
+    bf_io.burn_in(env, random_agent, observation_discretizer, action_sampler)
     seed_codebase = make_seed_codebase(seed, env, observation_discretizer, action_sampler)
 
     failed_sprints = 0
