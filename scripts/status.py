@@ -19,8 +19,8 @@ def status_cmd(exp_dir):
         # However, they don't have to be integers
         pass
 
-    status_table = pd.DataFrame.from_records(records, index=index)
-    print(status_table.sort_index().to_string())
+    status_table = pd.DataFrame.from_records(records, index=index).sort_index()
+    print(status_table.to_string())
     status_table.to_pickle(os.path.join(*(exp_dir + ('status.pickle',))))
     status_table.to_latex(os.path.join(*(exp_dir + ('status.tex',))))
 
