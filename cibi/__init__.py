@@ -1,2 +1,2 @@
-__version__ = '3.6'
-__trust_version__ = '3.6'
+__version__ = '4.0'
+__trust_version__ = '4.0'

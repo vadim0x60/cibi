@@ -1,6 +1,6 @@
 env: CartPole-v1
 max-sprints: 100
-cibi-version: 3
+cibi-version: 4
 team: 5
 allowed-commands: "@><^+-[].,!~01234abcde"
 seed: cartpole1.txt

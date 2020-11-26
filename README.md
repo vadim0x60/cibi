@@ -78,7 +78,7 @@ An example that specifies everything that can be specified:
 
 ```
 env: HeartPole
-cibi-version: 3
+cibi-version: 4
 max-sprints: 1000000
 max-sprints-without-improvement: 10000
 team: 0
@@ -114,7 +114,7 @@ If the training process was killed (intentionally or not), it can be resumed wit
 After the training finishes, there will be several files in `EXPERIMENT_DIR`, the most important one being `top.pickle` containing 256 best programs. It is a pandas dataframe to be loaded with `pandas.read_pickle()` with programs and some metadata including their `test_quality` - total episode reward averaged over 100 episodes. `programs.pickle` contains all programs written in the process of getting to the best ones, `log.log` is what you'd expect from a log file, `train` folder contains model checkpoints, and `summary.yml` is a short summary of experiment status:
 
 ```
-cibi-version: '3.0'
+cibi-version: '4.0'
 longest-episode: 42
 max-total-reward: 42.0
 seconds-elapsed: 16467.135838000104
