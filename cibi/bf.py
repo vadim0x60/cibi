@@ -173,7 +173,7 @@ class Executable(Agent):
       self.program_trace.append(ExecutionSnapshot(
           codeptr=self.codeptr, codechar=command, memptr=self.cellptr,
           memval=self.read(), memory=list(self.cells),
-          state=self.state, action_stack=self.action_stack))
+          state=self.state, action_stack=self.action_stack.copy()))
 
   def done(self):
     if self.state != State.FINISHED:

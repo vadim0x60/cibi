@@ -75,18 +75,7 @@ class BfTest(tf.test.TestCase):
     self.assertCorrectOutput(
         [0],
         evaluate('+,.'))
-
-  def testInputBuffer(self):
-    self.assertCorrectOutput(
-        [2, 3, 4],
-        evaluate('>,[>,]<[.<]', input_buffer=[4, 3, 2]))
-
-  def testBadChars(self):
-    self.assertCorrectOutput(
-        [2, 3, 4],
-        evaluate('>,[>,]hllo<worl[.<]commnts',
-                    input_buffer=[4, 3, 2]))
-
+        
   def testUnmatchedBraces(self):
     self.assertCorrectOutput(
         [3, -4, 1],
@@ -121,25 +110,22 @@ class BfTest(tf.test.TestCase):
 
   def testProgramTrace(self):
     es = bf.ExecutionSnapshot
-    agent = evaluate(',[.>,].', input_buffer=[2, 1], debug=True)
+    agent = evaluate('[.>,].', input_buffer=[2, 1], debug=True)
     self.assertEqual(
-        [es(codeptr=0, codechar=',', memptr=0, memval=0, memory=[0], action_stack=[0, 1, 2], state='executing'), 
-         es(codeptr=0, codechar=',', memptr=0, memval=0, memory=[0], action_stack=[0, 1, 2], state='awaiting-input'), 
-         es(codeptr=0, codechar=',', memptr=0, memval=0, memory=[0], action_stack=[0, 1, 2], state='executing'), 
-         es(codeptr=1, codechar='[', memptr=0, memval=2, memory=[2], action_stack=[0, 1, 2], state='executing'), 
-         es(codeptr=2, codechar='.', memptr=0, memval=2, memory=[2], action_stack=[0, 1, 2], state='executing'), 
-         es(codeptr=3, codechar='>', memptr=0, memval=2, memory=[2], action_stack=[0, 1, 2], state='executing'), 
-         es(codeptr=4, codechar=',', memptr=1, memval=0, memory=[2, 0], action_stack=[0, 1, 2], state='executing'), 
-         es(codeptr=4, codechar=',', memptr=1, memval=0, memory=[2, 0], action_stack=[0, 1, 2], state='awaiting-input'), 
-         es(codeptr=4, codechar=',', memptr=1, memval=0, memory=[2, 0], action_stack=[0, 1, 2], state='executing'), 
-         es(codeptr=5, codechar=']', memptr=1, memval=1, memory=[2, 1], action_stack=[0, 1, 2], state='executing'), 
-         es(codeptr=2, codechar='.', memptr=1, memval=1, memory=[2, 1], action_stack=[0, 1, 2], state='executing'), 
-         es(codeptr=3, codechar='>', memptr=1, memval=1, memory=[2, 1], action_stack=[0, 1, 2], state='executing'), 
-         es(codeptr=4, codechar=',', memptr=2, memval=0, memory=[2, 1, 0], action_stack=[0, 1, 2], state='executing'), 
-         es(codeptr=4, codechar=',', memptr=2, memval=0, memory=[2, 1, 0], action_stack=[0, 1, 2], state='awaiting-input'), 
-         es(codeptr=4, codechar=',', memptr=2, memval=0, memory=[2, 1, 0], action_stack=[0, 1, 2], state='executing'), 
-         es(codeptr=5, codechar=']', memptr=2, memval=0, memory=[2, 1, 0], action_stack=[0, 1, 2], state='executing'), 
-         es(codeptr=6, codechar='.', memptr=2, memval=0, memory=[2, 1, 0], action_stack=[0, 1, 2], state='executing')],
+        [es(codeptr=1, codechar=',', memptr=0, memval=2, memory=[2], action_stack=[], state='executing'), 
+         es(codeptr=1, codechar='.', memptr=0, memval=2, memory=[2], action_stack=[], state='executing'), 
+         es(codeptr=2, codechar='>', memptr=0, memval=2, memory=[2], action_stack=[2], state='executing'), 
+         es(codeptr=3, codechar=',', memptr=1, memval=0, memory=[2, 0], action_stack=[2], state='executing'), 
+         es(codeptr=3, codechar=',', memptr=1, memval=0, memory=[2, 0], action_stack=[2], state='awaiting-input'), 
+         es(codeptr=4, codechar=',', memptr=1, memval=1, memory=[2, 1], action_stack=[2], state='executing'), 
+         es(codeptr=4, codechar=']', memptr=1, memval=1, memory=[2, 1], action_stack=[2], state='executing'), 
+         es(codeptr=1, codechar='.', memptr=1, memval=1, memory=[2, 1], action_stack=[2], state='executing'), 
+         es(codeptr=2, codechar='>', memptr=1, memval=1, memory=[2, 1], action_stack=[1, 2], state='executing'), 
+         es(codeptr=3, codechar=',', memptr=2, memval=0, memory=[2, 1, 0], action_stack=[1, 2], state='executing'), 
+         es(codeptr=3, codechar=',', memptr=2, memval=0, memory=[2, 1, 0], action_stack=[1, 2], state='awaiting-input'), 
+         es(codeptr=4, codechar=',', memptr=2, memval=0, memory=[2, 1, 0], action_stack=[1, 2], state='executing'), 
+         es(codeptr=4, codechar=']', memptr=2, memval=0, memory=[2, 1, 0], action_stack=[1, 2], state='executing'), 
+         es(codeptr=5, codechar='.', memptr=2, memval=0, memory=[2, 1, 0], action_stack=[1, 2], state='executing')],
         agent.program_trace)
 
   def testStreamDiscretizer(self):
