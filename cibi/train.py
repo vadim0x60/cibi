@@ -159,7 +159,7 @@ def run_experiments(logdir):
         logger.info(f'Summary: {summary}')
         
         top_candidates = agent.archive_branch.top_k('test_quality', 256)
-        #ensure_enough_test_runs(top_candidates, env, observation_discretizer, action_sampler)
+        ensure_enough_test_runs(top_candidates, env, observation_discretizer, action_sampler)
         top_candidates.data_frame.to_pickle(os.path.join(logdir, 'top.pickle'))
 
 if __name__ == '__main__':
