@@ -81,8 +81,9 @@ class Codebase():
 
                 for metadata_column in self.metadata:
                     try:
-                        # We store metadata only for the last occurence of the program
-                        program_row[metadata_column] = metadata[metadata_column]
+                        # We store metadata only for the first occurence of the program
+                        if program_row[metadata_column] != program_row[metadata_column]:
+                            program_row[metadata_column] = metadata[metadata_column]
                     except KeyError:
                         pass
 
@@ -99,9 +100,10 @@ class Codebase():
         else:
             self.flush_ttl -= 1
 
-    def merge(self, other_codebase):
-        assert self.metrics == other_codebase.metrics
-        assert self.metadata == other_codebase.metadata
+    def merge(self, other_codebase, force=False):
+        if not force:
+            assert self.metrics == other_codebase.metrics
+            assert self.metadata == other_codebase.metadata
 
         for _, row in other_codebase.data_frame.iterrows():
             metrics = {metric: row[metric] for metric in self.metrics}
@@ -129,7 +131,7 @@ class Codebase():
         for code, data in other_codebase.data_frame.iterrows():
             self.data_frame.replace(self.data_frame['code'] == code, data, inplace=True)
 
-    def select(self, codes):
+    def subset(self, codes):
         subcodebase = make_codebase_like(self)
         subcodebase.data_frame = self.data_frame.loc[codes]
         return subcodebase
