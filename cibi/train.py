@@ -156,11 +156,24 @@ def run_experiments(logdir):
                     logger.error('Tolerance for failed sprints exceeded')
                     raise e
 
-        logger.info(f'Summary: {summary}')
-        
         top_candidates = agent.archive_branch.top_k('test_quality', 256)
         ensure_enough_test_runs(top_candidates, env, observation_discretizer, action_sampler)
+        top_program, top_metrics, top_metadata = top_candidates.top_k('test_quality', 1).peek()
+
+        summary['top'] = {
+            'code': top_program,
+            'author': top_metadata['author'],
+            'method': top_metadata['method'],
+            'parent1': top_metadata['parent1'],
+            'parent2': top_metadata['parent2'],
+            'test_quality': float(top_metrics['test_quality'])
+        }
+
         top_candidates.data_frame.to_pickle(os.path.join(logdir, 'top.pickle'))
+
+        logger.info(f'Summary: {summary}')
+        with open(os.path.join(logdir, 'summary.yml'), 'w') as f:
+            yaml.dump(summary, f)
 
 if __name__ == '__main__':
     run_experiments()

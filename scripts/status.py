@@ -59,7 +59,6 @@ def get_status(parent_dir, exp_name):
                 
                 with open(top_path, 'rb') as top_f:
                     top_codebase = pd.read_pickle(top_f)
-                    score = top_codebase['test_quality'].max()
             else:
                 status = 'IN PROGRESS'
 
@@ -72,6 +71,9 @@ def get_status(parent_dir, exp_name):
                         status = 'RESTART NEEDED'
 
                     mtr = summary['max-total-reward']
+                    top_program = summary.get('top')
+                    if top_program:
+                        score = top_program['test_quality']
             except yaml.YAMLError:
                 pass
 
