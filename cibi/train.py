@@ -149,6 +149,9 @@ def run_experiments(logdir):
                     yaml.dump(summary, f)
 
                 failed_sprints = 0
+            except KeyboardInterrupt:
+                logger.info('Keyboard interrupt received. Winding down')
+                break
             except Exception as e:
                 logger.error(traceback.format_exc())
                 failed_sprints += 1
