@@ -119,6 +119,7 @@ sample_experiment/top.pickle
 sample_experiment/status.pickle
 sample_experiment/summary.yml
 sample_experiment/events
+sample_experiment/train
 
 # Editor settings
 .vscode

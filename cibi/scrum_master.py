@@ -19,7 +19,6 @@ class ScrumMaster(Agent):
     def __init__(self, developers, env, 
                  observation_discretizer, action_sampler,
                  seed_codebase = None, sprints_elapsed=0,
-                 sprint_length=100, stretch_sprints=True,
                  cycle_programs=True, syntax_error_reward=0, replay_temperature=1,
                  program_file=None):
         self.developers = developers
@@ -32,10 +31,7 @@ class ScrumMaster(Agent):
         self.syntax_error_reward = syntax_error_reward
         self.replay_temperature = replay_temperature
 
-        self.sprint_length = sprint_length
-        self.sprint_ttl = sprint_length
-        self.stretch_sprints = stretch_sprints
-        self.sprints_elapsed = sprints_elapsed
+        self.sprints_elapsed = 0
 
         self.dev_branch = make_dev_codebase()
         self.feedback_branch = make_prod_codebase(deduplication=False)
@@ -117,16 +113,12 @@ class ScrumMaster(Agent):
             self.lead_developer = next(self.developer_queue)
 
     def done(self):
-        if self.sprint_ttl <= 0:
-            self.reprogram()
+        self.reprogram()
+
         self.archive_branch.flush()
 
     def reward(self, reward):
         self.prod_rewards.append(reward)
-        self.sprint_ttl -= 1
-            
-        if not self.stretch_sprints and self.sprint_ttl == 0:
-            self.reprogram()
 
     def write_programs(self):
         # If we have something to discuss, discuss before writing new code
@@ -153,7 +145,6 @@ class ScrumMaster(Agent):
                                           observation_discretizer=self.observation_discretizer, 
                                           action_sampler=self.action_sampler,
                                           cycle=self.cycle_programs)
-        self.sprint_ttl = self.sprint_length
         self.sprints_elapsed += 1
         
 def hire_team(developers, env, observation_discretizer, action_sampler, 

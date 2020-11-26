@@ -52,8 +52,7 @@ def run_experiments(logdir):
     render = config.get('render', False)
     discretization_config = config.get('discretization', {})
 
-    scrum_keys = ['sprint-length', 'stretch-sprints',
-                  'cycle-programs', 'syntax-error-reward', 'replay-temperature']
+    scrum_keys = ['cycle-programs', 'syntax-error-reward', 'replay-temperature']
     scrum_config = {key.replace('-', '_'): config[key] for key in scrum_keys if key in config}
 
     max_failed_sprints = config.get('max-failed-sprints', 10)
@@ -93,7 +92,7 @@ def run_experiments(logdir):
             if 'experiment' in summary and config_hash != summary['experiment']:
                 # Experiment params changed, need to start from scratch
                 summary = None
-            if not trusted_version(summary):
+            elif not trusted_version(summary):
                 # Important bug has been fixed since previous run, need to start from scratch
                 summary = None
     except FileNotFoundError as e:
@@ -130,7 +129,7 @@ def run_experiments(logdir):
     sprints_of_last_improvement = 0
     with hire_team(team, env, observation_discretizer, action_sampler, language,
                 train_dir, events_dir, scrum_config, seed_codebase) as agent:
-        max_episode_length = config.get('max-episode-length', max_sprints * agent.sprint_length)
+        max_episode_length = config.get('max-episode-length')
 
         while (agent.sprints_elapsed < max_sprints 
            and summary['sprints-elapsed'] - sprints_of_last_improvement < max_sprints_without_improvement):
@@ -160,7 +159,7 @@ def run_experiments(logdir):
         logger.info(f'Summary: {summary}')
         
         top_candidates = agent.archive_branch.top_k('test_quality', 256)
-        ensure_enough_test_runs(top_candidates, env, observation_discretizer, action_sampler)
+        #ensure_enough_test_runs(top_candidates, env, observation_discretizer, action_sampler)
         top_candidates.data_frame.to_pickle(os.path.join(logdir, 'top.pickle'))
 
 if __name__ == '__main__':
