@@ -164,11 +164,11 @@ def run_experiments(logdir):
         top_program, top_metrics, top_metadata = top_candidates.top_k('test_quality', 1).peek()
 
         summary['top'] = {
-            'code': top_program,
-            'author': top_metadata['author'],
-            'method': top_metadata['method'],
-            'parent1': top_metadata['parent1'],
-            'parent2': top_metadata['parent2'],
+            'code': str(top_program),
+            'author': str(top_metadata['author']),
+            'method': str(top_metadata['method']),
+            'parent1': str(top_metadata['parent1']),
+            'parent2': str(top_metadata['parent2']),
             'test_quality': float(top_metrics['test_quality'])
         }
 
