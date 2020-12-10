@@ -55,9 +55,17 @@ def run_experiments(logdir):
     scrum_keys = ['cycle-programs', 'syntax-error-reward', 'replay-temperature']
     scrum_config = {key.replace('-', '_'): config[key] for key in scrum_keys if key in config}
 
+    team = teams[config['team']]
+    env = make_gym(config['env'])
+
     max_failed_sprints = config.get('max-failed-sprints', 10)
     max_sprints = config.get('max-sprints', 1000000)
     max_sprints_without_improvement = config.get('max-sprints-without-improvement', 1000000)
+    
+    # In the config ifle you specify maximum number of sprints _per team member_
+    max_sprints *= len(team)
+    max_sprints_without_improvement *= len(team)
+    
     os.makedirs(logdir, exist_ok=True)
 
     scrum_config['program_file'] = os.path.join(logdir, 'programs.pickle')
@@ -66,9 +74,6 @@ def run_experiments(logdir):
     logger.addHandler(logging.FileHandler(f'{logdir}/log.log'))
     logger.info(config['env'])
     start_time = time.monotonic()
-
-    team = teams[config['team']]
-    env = make_gym(config['env'])
 
     seed = config.get('seed')
     if seed:
@@ -164,11 +169,11 @@ def run_experiments(logdir):
         top_program, top_metrics, top_metadata = top_candidates.top_k('test_quality', 1).peek()
 
         summary['top'] = {
-            'code': top_program,
-            'author': top_metadata['author'],
-            'method': top_metadata['method'],
-            'parent1': top_metadata['parent1'],
-            'parent2': top_metadata['parent2'],
+            'code': str(top_program),
+            'author': str(top_metadata['author']),
+            'method': str(top_metadata['method']),
+            'parent1': str(top_metadata['parent1']),
+            'parent2': str(top_metadata['parent2']),
             'test_quality': float(top_metrics['test_quality'])
         }
 
