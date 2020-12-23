@@ -20,13 +20,14 @@ class ScrumMaster(Agent):
                  observation_discretizer, action_sampler,
                  seed_codebase = None, sprints_elapsed=0,
                  cycle_programs=True, syntax_error_reward=0, replay_temperature=1,
-                 program_file=None):
+                 program_file=None, quality_callback=lambda x: x):
         self.developers = developers
         self.developer_queue = itertools.cycle(developers)
         self.lead_developer = next(self.developer_queue)
         self.observation_discretizer = observation_discretizer
         self.action_sampler = action_sampler
         self.cycle_programs = cycle_programs
+        self.quality_callback = quality_callback
 
         self.syntax_error_reward = syntax_error_reward
         self.replay_temperature = replay_temperature
@@ -58,6 +59,8 @@ class ScrumMaster(Agent):
     def finalize_episode(self):
         if self.prod_rewards:
             q = sum(self.prod_rewards)
+
+            self.quality_callback(q)
 
             self.prod_program.metrics['test_quality'] = q
             self.prod_program.metrics['replay_weight'] = exp(q / self.replay_temperature)

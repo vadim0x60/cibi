@@ -7,6 +7,8 @@ import time
 import yaml
 import traceback
 
+from evestop.generic import EVEEarlyStopping
+
 import cibi
 from cibi import bf
 from cibi import bf_io
@@ -59,12 +61,10 @@ def run_experiments(logdir):
     env = make_gym(config['env'])
 
     max_failed_sprints = config.get('max-failed-sprints', 10)
-    max_sprints = config.get('max-sprints', 1000000)
-    max_sprints_without_improvement = config.get('max-sprints-without-improvement', 1000000)
-    
-    # In the config ifle you specify maximum number of sprints _per team member_
-    max_sprints *= len(team)
-    max_sprints_without_improvement *= len(team)
+    max_sprints = config.get('max-sprints', 1000000) * len(team)
+    max_sprints_without_improvement = config.get('max-sprints-without-improvement', 1000000) * len(team)
+
+    early_stopping = EVEEarlyStopping(mode='max', patience=max_sprints_without_improvement*len(team))
     
     os.makedirs(logdir, exist_ok=True)
 
@@ -115,6 +115,7 @@ def run_experiments(logdir):
     
     summary['cibi-version'] = cibi.__version__
     scrum_config['sprints_elapsed'] = summary['sprints-elapsed']
+    scrum_config['quality_callback'] = early_stopping.register
     start_time -= summary['seconds-elapsed']
 
     train_dir = os.path.join(logdir, 'train')
@@ -131,13 +132,11 @@ def run_experiments(logdir):
     seed_codebase = make_seed_codebase(seed, env, observation_discretizer, action_sampler)
 
     failed_sprints = 0
-    sprints_of_last_improvement = 0
     with hire_team(team, env, observation_discretizer, action_sampler, language,
-                train_dir, events_dir, scrum_config, seed_codebase) as agent:
+                   train_dir, events_dir, scrum_config, seed_codebase) as agent:
         max_episode_length = config.get('max-episode-length')
 
-        while (agent.sprints_elapsed < max_sprints 
-           and summary['sprints-elapsed'] - sprints_of_last_improvement < max_sprints_without_improvement):
+        while (agent.sprints_elapsed < max_sprints and early_stopping.proceed):
             try:
                 rollout = agent.attend_gym(env, max_reps=max_episode_length, render=render)
 
