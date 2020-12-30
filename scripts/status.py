@@ -74,7 +74,7 @@ def get_status(parent_dir, exp_name):
                     top_program = summary.get('top')
                     if top_program:
                         score = top_program['test_quality']
-            except yaml.YAMLError:
+            except (yaml.YAMLError, AttributeError):
                 pass
 
         experiment['mtr'] = mtr
