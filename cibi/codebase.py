@@ -42,9 +42,12 @@ class Codebase():
 
         if self.save_file:
             try:
-                self.data_frame = pd.read_pickle(save_file)
-                assert list(self.data_frame.columns) == columns
-                assert list(self.data_frame.dtypes) == types
+                cache = pd.read_pickle(save_file)
+                assert list(cache.columns) == columns
+
+                self.data_frame = cache.astype({
+                    cname: ctype for cname, ctype in zip(columns, types)
+                })
             except FileNotFoundError:
                 self.data_frame = None
         else:
