@@ -173,7 +173,8 @@ class Codebase():
                 logger.warn(e)
         
         if sampled_data_frame is None:
-            sampled_data_frame = self.data_frame.sample(n=n, weights=None)
+            sample_size = min(n, len(self.data_frame))
+            sampled_data_frame = self.data_frame.sample(n=sample_size, weights=None)
 
         sampled_codebase = make_codebase_like(self)
         sampled_codebase.data_frame = sampled_data_frame
