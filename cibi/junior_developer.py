@@ -29,7 +29,7 @@ class MutationLever():
         self.mut_function = mut_function
 
     def pull(self, language, inspiration_branch, indpb):
-        parent_code, _, _ = inspiration_branch.sample(1, metric='test_quality').peek()
+        parent_code, _, _ = inspiration_branch.sample(1, metric='replay_weight').peek()
         
         if len(parent_code) > 1:
             # list() is important not just as a type conversion, but to prevent 
@@ -51,7 +51,7 @@ class CrossoverLever():
         if len(inspiration_branch) < 2:
             return codebase
 
-        parent_code1, parent_code2 = inspiration_branch.sample(2, metric='test_quality')['code']
+        parent_code1, parent_code2 = inspiration_branch.sample(2, metric='replay_weight')['code']
         child_code1, child_code2 = list(parent_code1), list(parent_code2)
 
         if len(child_code1) > 1 and len(child_code1) > 1:
@@ -70,7 +70,7 @@ class RefactoringLever():
     name = 'refactoring'
 
     def pull(self, language, inspiration_branch, indpb):
-        code, _, _ = inspiration_branch.sample(1, metric='test_quality').peek()
+        code, _, _ = inspiration_branch.sample(1, metric='replay_weight').peek()
         codebase = make_dev_codebase()
         metadata = {'method': self.name, 
                     'parent1': code}
