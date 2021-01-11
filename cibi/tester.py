@@ -15,7 +15,7 @@ class Tester():
 
     def write_programs(self, inspiration_branch):
         dev_branch = make_dev_codebase()
-        dev_branch.merge(inspiration_branch.sample(self.n, metric='test_quality'), force=True)
+        dev_branch.merge(inspiration_branch.sample(self.n, metric='replay_weight'), force=True)
         return dev_branch
 
     def accept_feedback(self, feedback_branch):
