@@ -164,17 +164,9 @@ class Codebase():
         self.data_frame = self.data_frame.iloc[0:0]
 
     def sample(self, n=1, metric=None, keep_count=False):
-        sampled_data_frame = None
-
-        if metric:
-            try:
-                sampled_data_frame = self.data_frame.sample(n=n, weights=self.data_frame[metric])
-            except ValueError as e:
-                logger.warn(e)
-        
-        if sampled_data_frame is None:
-            sample_size = min(n, len(self.data_frame))
-            sampled_data_frame = self.data_frame.sample(n=sample_size, weights=None)
+        sample_size = min(n, len(self.data_frame))
+        sampled_data_frame = self.data_frame.sample(n=sample_size, 
+                                                    weights=self.data_frame[metric] if metric else None)
 
         sampled_codebase = make_codebase_like(self)
         sampled_codebase.data_frame = sampled_data_frame
