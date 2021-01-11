@@ -189,9 +189,9 @@ def run_experiments(logdir, finalize_now):
                                             save_file=scrum_config['program_file'])
         assert len(archive_branch), 'Trying to finalize training with no programs written'
 
-    top_candidates = archive_branch.top_k('test_quality', 256)
+    top_candidates = archive_branch.top_k('total_reward', 256)
     ensure_enough_test_runs(top_candidates, env, observation_discretizer, action_sampler)
-    top_program, top_metrics, top_metadata = top_candidates.top_k('test_quality', 1).peek()
+    top_program, top_metrics, top_metadata = top_candidates.top_k('total_reward', 1).peek()
 
     summary['top'] = {
         'code': str(top_program),
@@ -199,7 +199,7 @@ def run_experiments(logdir, finalize_now):
         'method': str(top_metadata['method']),
         'parent1': str(top_metadata['parent1']),
         'parent2': str(top_metadata['parent2']),
-        'test_quality': float(top_metrics['test_quality'])
+        'total_reward': float(top_metrics['total_reward'])
     }
 
     top_candidates.data_frame.to_pickle(os.path.join(logdir, 'top.pickle'))

@@ -246,7 +246,7 @@ def ensure_enough_test_runs(codebase, env, observation_discretizer, action_sampl
       program = bf.Executable(code, observation_discretizer, action_sampler, cycle=True, debug=False)
       for _ in range(runs - count):
           rollout = program.attend_gym(env, render=render)
-          codebase.commit(code, metrics={'test_quality': rollout.total_reward})
+          codebase.commit(code, metrics={'total_reward': rollout.total_reward})
 
 def calc_hash(val):
   import hashlib

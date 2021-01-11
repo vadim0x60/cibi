@@ -19,7 +19,7 @@ class ScrumMaster(Agent):
     def __init__(self, developers, env, 
                  observation_discretizer, action_sampler,
                  seed_codebase = None, sprints_elapsed=0,
-                 cycle_programs=True, syntax_error_reward=0, replay_temperature=1,
+                 cycle_programs=True, replay_temperature=50,
                  program_file=None, quality_callback=lambda x: x):
         self.developers = developers
         self.developer_queue = itertools.cycle(developers)
@@ -29,7 +29,6 @@ class ScrumMaster(Agent):
         self.cycle_programs = cycle_programs
         self.quality_callback = quality_callback
 
-        self.syntax_error_reward = syntax_error_reward
         self.replay_temperature = replay_temperature
 
         self.sprints_elapsed = 0
@@ -40,7 +39,7 @@ class ScrumMaster(Agent):
                                                  save_file=program_file)
 
         if seed_codebase and len(self.archive_branch) == 0:
-            seed_codebase['replay_weight'] = np.exp(np.array(seed_codebase['test_quality']) 
+            seed_codebase['quality'] = np.exp(np.array(seed_codebase['total_reward']) 
                                                     / self.replay_temperature)
             self.archive_branch.merge(seed_codebase)
 
@@ -62,8 +61,8 @@ class ScrumMaster(Agent):
 
             self.quality_callback(q)
 
-            self.prod_program.metrics['test_quality'] = q
-            self.prod_program.metrics['replay_weight'] = exp(q / self.replay_temperature)
+            self.prod_program.metrics['total_reward'] = q
+            self.prod_program.metrics['quality'] = exp(q / self.replay_temperature)
 
             self.prod_program.metadata['result'] = self.prod_program.result
             self.prod_program.metadata['author'] = self.lead_developer.name
@@ -88,7 +87,7 @@ class ScrumMaster(Agent):
                 return
             except bf.ProgramFinishedError:
                 if self.prod_program.result != bf.Result.SUCCESS:
-                    self.prod_rewards = [self.syntax_error_reward]
+                    self.prod_rewards = [float('-inf')]
                     self.reprogram()
                 else:
                     raise
@@ -99,7 +98,7 @@ class ScrumMaster(Agent):
                 return self.prod_program.act()
             except bf.ProgramFinishedError:
                 if self.prod_program.result != bf.Result.SUCCESS:
-                    self.prod_rewards = [self.syntax_error_reward]
+                    self.prod_rewards = [float('-inf')]
                     self.reprogram()
                 else:
                     raise

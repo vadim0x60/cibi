@@ -205,7 +205,7 @@ def make_dev_codebase(save_file=None):
                     save_file=save_file)
 
 def make_prod_codebase(deduplication, save_file=None):
-    return Codebase(metrics=['test_quality', 'replay_weight', 'log_prob'],
+    return Codebase(metrics=['total_reward', 'quality', 'log_prob'],
                     metadata=['result', 'author', 'method', 'parent1', 'parent2'],
                     deduplication=deduplication,
                     save_file=save_file)

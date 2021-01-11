@@ -73,7 +73,7 @@ def get_status(parent_dir, exp_name):
                     mtr = summary['max-total-reward']
                     top_program = summary.get('top')
                     if top_program:
-                        score = top_program['test_quality']
+                        score = top_program['total_reward']
             except (yaml.YAMLError, AttributeError):
                 pass
 

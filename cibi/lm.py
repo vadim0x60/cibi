@@ -698,7 +698,7 @@ class LanguageModel:
     assert len(feedback_branch) == self.config.batch_size
 
     if self.config.topk != 0:
-      off_policy_branch = self.inspiration_branch.top_k('test_quality', self.config.topk)
+      off_policy_branch = self.inspiration_branch.top_k('quality', self.config.topk)
       if len(off_policy_branch) > self.config.topk_batch_size:
         off_policy_branch = off_policy_branch.sample(self.config.topk_batch_size)
     else:
@@ -805,7 +805,7 @@ class LanguageModel:
             for i, l in enumerate(adjusted_lengths)]
         new_experiences = [
             (separate_actions[i],
-            on_policy_branch['test_quality'][i],
+            on_policy_branch['total_reward'][i],
             on_policy_branch['log_prob'][i], l)
             for i, l in enumerate(adjusted_lengths)]
         on_policy_policy_multipliers = [
@@ -823,7 +823,7 @@ class LanguageModel:
         on_policy_adjusted_lengths = []
 
       if (not empty_replay_buffer) and num_programs_from_replay_buff:
-        on_policy_branch['replay_weight'] = 0
+        on_policy_branch['quality'] = 0
         # Look for new experiences in replay buffer. Assign weight if an episode
         # is in the buffer.
         on_policy_branch.replace(replay_branch)
@@ -917,14 +917,14 @@ class LanguageModel:
           session,
           global_step,
           global_npe,
-          feedback_branch['test_quality'][s_i],
+          feedback_branch['total_reward'][s_i],
           feedback_lengths[s_i], 
           feedback_branch['code'][s_i], 
           feedback_branch['result'][s_i])
-      reward_summary = self._rl_reward_summary(feedback_branch['test_quality'])
+      reward_summary = self._rl_reward_summary(feedback_branch['total_reward'])
 
-      max_i = np.argmax(feedback_branch['test_quality'])
-      max_tot_r = feedback_branch['test_quality'][max_i]
+      max_i = np.argmax(feedback_branch['total_reward'])
+      max_tot_r = feedback_branch['total_reward'][max_i]
       if max_tot_r >= self.top_reward:
         if max_tot_r >= self.top_reward:
           self.top_reward = max_tot_r
@@ -934,10 +934,10 @@ class LanguageModel:
 
       if self.do_iw_summaries and not empty_replay_buffer:
         # prob of replay samples under replay buffer sampling.
-        total_weight = sum(replay_branch['replay_weight'])
+        total_weight = sum(replay_branch['quality'])
         norm_replay_weights = [
             w / total_weight
-            for w in replay_branch['replay_weight']]
+            for w in replay_branch['quality']]
         replay_iw = compute_iw(replay_branch, self.replay_alpha)
         on_policy_iw = compute_iw(on_policy_branch, self.replay_alpha)
         summaries_list.append(
@@ -955,14 +955,14 @@ class LanguageModel:
     """Compute REINFORCE targets.
 
     Treat a program as a reinforcement learning episode where a character
-    is an action and 'test_quality' is the reward for the last character
+    is an action and 'quality' is the reward for the last character
 
     REINFORCE here takes the form:
     grad_t = grad[log(pi(a_t|c_t))*target_t]
     where c_t is context: i.e. RNN state or environment state (or both).
 
     Args:
-      reinforce_branch: A Codebase with 'test_quality' metric
+      reinforce_branch: A Codebase with 'quality' metric
       baselines: Provide baselines for each timestep. This is a
           list (or indexable container) of length max_time. Note: baselines are
           shared across all episodes, which is why there is no batch dimension.
@@ -978,7 +978,7 @@ class LanguageModel:
           used to compute the targets). A numpy array of shape
           [batch_size, max_sequence_length].
     """
-    assert 'test_quality' in reinforce_branch.metrics, 'Reinforcement has to contain a quality metric'
+    assert 'quality' in reinforce_branch.metrics, 'Reinforcement has to contain a quality metric'
     assert len(reinforce_branch)
 
     lengths = [len(code) for code in reinforce_branch['code']]
@@ -989,7 +989,7 @@ class LanguageModel:
     action_rewards = utils.stack_pad(
       [[0] * (episode_length - 1) + [episode_reward]
       for episode_reward, episode_length in 
-      zip(reinforce_branch['test_quality'], lengths)],
+      zip(reinforce_branch['quality'], lengths)],
       pad_axes=0
     )
 
@@ -1032,13 +1032,13 @@ class LanguageModel:
 def compute_iw(codebase, replay_alpha):
     """Compute importance weights for a batch of episodes.
 
-    The codebase has to contain a 'replay_weight' and 'log_prob' metrics
+    The codebase has to contain a 'quality' and 'log_prob' metrics
 
     Returns:
       Numpy array of shape [batch_size] containing the importance weight for
       each episode in the batch.
     """
-    total_replay_weight = sum(codebase['replay_weight'])
+    total_replay_weight = sum(codebase['quality'])
     if total_replay_weight == 0:
       # This happens when:
       # - codebase is empty
@@ -1063,11 +1063,11 @@ def compute_iw(codebase, replay_alpha):
                               - log_p))
             if replay_weight > 0 else 1.0 / a_com
             for log_p, replay_weight
-            in zip(codebase['log_prob'], codebase['replay_weight'])])
+            in zip(codebase['log_prob'], codebase['quality'])])
         return importance_weights
       except OverflowError:
         # This Softmax is too close for the CPU to handle
         # So it's safe to turn it into just max
         importance_weights = np.zeros(len(codebase))
-        importance_weights[np.argmax(codebase['replay_weight'])] = 1
+        importance_weights[np.argmax(codebase['quality'])] = 1
       return importance_weights
