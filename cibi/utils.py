@@ -240,13 +240,17 @@ def ensure_enough_test_runs(codebase, env, observation_discretizer, action_sampl
   assert codebase.deduplication
 
   for code, count, result in zip(codebase['code'], codebase['count'], codebase['result']):
+    try:
       if result in ['syntax-error', 'step-limit']:
-          continue
+        continue
 
       program = bf.Executable(code, observation_discretizer, action_sampler, cycle=True, debug=False)
       for _ in range(runs - count):
-          rollout = program.attend_gym(env, render=render)
-          codebase.commit(code, metrics={'total_reward': rollout.total_reward})
+        rollout = program.attend_gym(env, render=render)
+        codebase.commit(code, metrics={'total_reward': rollout.total_reward})
+    except KeyboardInterrupt:
+      logger.info('Testing phase cut short by KeyboardInterrupt')
+      break
 
 def calc_hash(val):
   import hashlib
