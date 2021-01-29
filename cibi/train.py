@@ -84,7 +84,7 @@ def load_summary(logdir, config_hash):
 
     return summary
 
-def run_experiments(logdir, finalize_now):
+def run_experiments(logdir, finalize_now, skip_testing):
     # PREINIT - Reading the experiment's config file
     with open(os.path.join(logdir, 'experiment.yml'), 'r') as f:
         config = yaml.safe_load(f)
@@ -190,7 +190,8 @@ def run_experiments(logdir, finalize_now):
         assert len(archive_branch), 'Trying to finalize training with no programs written'
 
     top_candidates = archive_branch.top_k('total_reward', 256)
-    ensure_enough_test_runs(top_candidates, env, observation_discretizer, action_sampler)
+    if not skip_testing:
+        ensure_enough_test_runs(top_candidates, env, observation_discretizer, action_sampler)
     top_program, top_metrics, top_metadata = top_candidates.top_k('total_reward', 1).peek()
 
     summary['top'] = {
@@ -211,6 +212,7 @@ def run_experiments(logdir, finalize_now):
 @click.command()
 @click.argument('logdir', type=str)
 @click.option('--finalize-now', is_flag=True)
+@click.option('--skip-testing', is_flag=True)
 def run_experiments_cmd(**kwargs):
     return run_experiments(**kwargs)
 
