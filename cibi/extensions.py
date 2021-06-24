@@ -1,6 +1,9 @@
 import gym
 from heartpole import HeartPole
+from mlagents_envs.environment import UnityEnvironment
+from gym_unity.envs import UnityToGymWrapper
 
+import os
 class TaxiEnvMultiDiscrete(gym.Env):
     def __init__(self):
         self.openai_gym = gym.make('Taxi-v3')
@@ -22,9 +25,16 @@ class TaxiEnvMultiDiscrete(gym.Env):
     def render(self, *args, **kwargs):
         return self.openai_gym.render(*args, **kwargs)
 
+def gen_unity_env():
+    unity_build_path = os.environ.get('UNITY_BUILD')
+    unity_env = UnityEnvironment(file_name=unity_build_path)
+    env = UnityToGymWrapper(unity_env)
+    return env
+
 extensions = {
     'Taxi-v3mod': TaxiEnvMultiDiscrete,
-    'HeartPole-v0': HeartPole
+    'HeartPole-v0': HeartPole,
+    'Unity-v0': gen_unity_env
 }
 
 def make_gym(gym_name):
