@@ -19,23 +19,20 @@ import tensorflow as tf
 import logging
 logger = logging.getLogger(f'cibi.{__file__}')
 
+from importlib_metadata import version  
+
 import cibi
 
 def trusted_version(experiment_summary):
+  """Check if we need to distrust an artifact because it was produced by a previous major version of cibi"""
+
   if 'cibi-version' not in experiment_summary:
     return False
 
-  real_version = [int(x) for x in experiment_summary['cibi-version'].split('.')]
-  trusted_version = [int(x) for x in cibi.__trust_version__.split('.')]
+  artefact_version = [int(x) for x in experiment_summary['cibi-version'].split('.')]
+  cibi_version = [int(x) for x in version('cibi').split('.')]
   
-  for real,expected in zip(real_version, trusted_version):
-    if real > expected:
-      return True
-    if real < expected:
-      return False
-
-  # real = expected
-  return True
+  return artefact_version[0] == cibi_version[0]
 
 def with_graph(graph):
   def with_this_graph(method):
@@ -219,13 +216,6 @@ def get_dir_out_of_the_way(path):
         if not os.path.exists(alternative_path):
             shutil.move(path, alternative_path)
             break
-
-def get_project_dir(dir):
-  import os
-  # https://stackoverflow.com/questions/3167154/how-to-split-a-dos-path-into-its-components-in-python
-  path_components = os.path.normpath(__file__).split(os.path.sep)
-  project_dir = os.path.join(*(['/'] + path_components[:-2] + [dir,]))
-  return project_dir
 
 def parse_config_string(config_str):
   config = {}

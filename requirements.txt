@@ -1,17 +1,1 @@
-numpy==1.*
-scipy==1.*
-tensorflow==1.*
-six==1.*
-gym[box2d]==0.*
-click==7.*
-dill==0.*
-sortedcontainers==2.*
-sortedcollections==1.*
-deap==1.*
-pyyaml==5.*
-pandas==1.*
-heartpole==1.*
-evestop==0.*
-auto-als
--e vendor/bandits
-git+git://github.com/akiani/gym-sepsis
+.
