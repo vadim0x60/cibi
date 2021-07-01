@@ -12,5 +12,6 @@ pyyaml==5.*
 pandas==1.*
 heartpole==1.*
 evestop==0.*
+auto-als
 -e vendor/bandits
 git+git://github.com/akiani/gym-sepsis
