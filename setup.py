@@ -16,7 +16,7 @@ dependencies = [
       'heartpole==1.*',
       'evestop==0.*',
       'auto-als',
-      'bandits @ git+https://github.com/bgalbraith/bandits.git',
+      'bandits @ git+https://github.com/vadim0x60/bandits.git',
       'importlib_metadata==2.*',
       'importlib_resources==5.*'
 ]
