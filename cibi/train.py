@@ -22,6 +22,7 @@ from cibi.codebase import make_prod_codebase
 from cibi.extensions import make_gym
 from cibi.teams import teams
 from cibi.scrum_master import hire_team
+from cibi.agent import EnvError
 
 logging.basicConfig(format='%(asctime)s %(message)s')
 logger = logging.getLogger('cibi')
@@ -141,7 +142,12 @@ def run_experiments(logdir, finalize_now, skip_testing):
     language = bf.make_bf_plus(config.get('allowed-commands', bf.DEFAULT_CMD_SET))
 
     random_agent = bf.Executable('@!', observation_discretizer, action_sampler, cycle=True, debug=False)
-    bf_io.burn_in(env, random_agent, observation_discretizer, action_sampler)
+
+    try:
+        bf_io.burn_in(env, random_agent, observation_discretizer, action_sampler)
+    except EnvError:
+        logger.error('Could not complete burn in')
+        pass
 
     agent = None
 
@@ -178,7 +184,7 @@ def run_experiments(logdir, finalize_now, skip_testing):
                 except KeyboardInterrupt:
                     logger.info('Keyboard interrupt received. Winding down')
                     break
-                except Exception as e:
+                except EnvError as e:
                     logger.error(traceback.format_exc())
                     failed_sprints += 1
                     if failed_sprints > max_failed_sprints:
