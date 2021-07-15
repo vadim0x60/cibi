@@ -6,7 +6,7 @@ dependencies = [
       'tensorflow==1.*',
       'six==1.*',
       'gym[box2d]==0.*',
-      'click==7.*',
+      'click==8.*',
       'dill==0.*',
       'sortedcontainers==2.*',
       'sortedcollections==1.*',
