@@ -32,11 +32,11 @@ For environments listed in [the registry](https://github.com/openai/gym/wiki/Tab
 
 You can define the program as an argument
 
-`python cibi/run.py CartPole-v1 @!`
+`cibi-run CartPole-v1 @!`
 
 Or a run a codebase file with one or several newline-separated programs
 
-`python cibi/run.py CartPole-v1 -i programs.txt`
+`cibi-run CartPole-v1 -i programs.txt`
 
 The program will be run once unless `--avg` and/or `--best` options are specified. All options:
 
@@ -99,7 +99,7 @@ If we did not specify this, all sprints would be done within one reinforcement l
 Then run
 
 ```
-python cibi/train.py EXPERIMENT_DIR
+cibi-train EXPERIMENT_DIR
 ```
 
 If the training process was killed (intentionally or not), it can be resumed with the same command.
