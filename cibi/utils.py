@@ -19,23 +19,20 @@ import tensorflow as tf
 import logging
 logger = logging.getLogger(f'cibi.{__file__}')
 
+from importlib_metadata import version  
+
 import cibi
 
 def trusted_version(experiment_summary):
+  """Check if we need to distrust an artifact because it was produced by a previous major version of cibi"""
+
   if 'cibi-version' not in experiment_summary:
     return False
 
-  real_version = [int(x) for x in experiment_summary['cibi-version'].split('.')]
-  trusted_version = [int(x) for x in cibi.__trust_version__.split('.')]
+  artefact_version = [int(x) for x in experiment_summary['cibi-version'].split('.')]
+  cibi_version = [int(x) for x in version('cibi').split('.')]
   
-  for real,expected in zip(real_version, trusted_version):
-    if real > expected:
-      return True
-    if real < expected:
-      return False
-
-  # real = expected
-  return True
+  return artefact_version[0] == cibi_version[0]
 
 def with_graph(graph):
   def with_this_graph(method):
@@ -220,13 +217,6 @@ def get_dir_out_of_the_way(path):
             shutil.move(path, alternative_path)
             break
 
-def get_project_dir(dir):
-  import os
-  # https://stackoverflow.com/questions/3167154/how-to-split-a-dos-path-into-its-components-in-python
-  path_components = os.path.normpath(__file__).split(os.path.sep)
-  project_dir = os.path.join(*(['/'] + path_components[:-2] + [dir,]))
-  return project_dir
-
 def parse_config_string(config_str):
   config = {}
   for config_statement in config_str.split(','):
@@ -240,13 +230,17 @@ def ensure_enough_test_runs(codebase, env, observation_discretizer, action_sampl
   assert codebase.deduplication
 
   for code, count, result in zip(codebase['code'], codebase['count'], codebase['result']):
+    try:
       if result in ['syntax-error', 'step-limit']:
-          continue
+        continue
 
       program = BFExecutable(code, observation_discretizer, action_sampler, cycle=True, debug=False)
       for _ in range(runs - count):
-          rollout = program.attend_gym(env, render=render)
-          codebase.commit(code, metrics={'total_reward': rollout.total_reward})
+        rollout = program.attend_gym(env, render=render)
+        codebase.commit(code, metrics={'total_reward': rollout.total_reward})
+    except KeyboardInterrupt:
+      logger.info('Testing phase cut short by KeyboardInterrupt')
+      break
 
 def calc_hash(val):
   import hashlib

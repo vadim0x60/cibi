@@ -10,6 +10,9 @@ class ActionError(Exception):
         super().__init__(message)
         self.details = details
 
+class EnvError(Exception):
+    """Environment raised an exception"""
+    pass
 class Agent():
     def input(self, inp):
         pass
@@ -42,10 +45,17 @@ class Agent():
                         env.render()  
                     except NotImplementedError:
                         render = False
+                    except Exception as e:
+                        raise EnvError from e
                     
                 action = self.act()
                 prev_observation = observation
-                observation, reward, done, info = env.step(action)
+
+                try:
+                    observation, reward, done, info = env.step(action)
+                except Exception as e:
+                    raise EnvError from e
+                    
                 rollout.add(prev_observation, action, reward, done)
                 self.reward(reward)
 

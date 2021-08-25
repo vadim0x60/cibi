@@ -7,15 +7,20 @@ import time
 import yaml
 import traceback
 
+from importlib_metadata import version
 from evestop.generic import EVEEarlyStopping
+
+from pathlib import Path
+from importlib_resources import files
 
 import cibi
 from cibi.compilers import bf, bf_io
-from cibi.utils import ensure_enough_test_runs, get_project_dir, calc_hash, update_keys, trusted_version
+from cibi.utils import ensure_enough_test_runs, calc_hash, update_keys, trusted_version
 from cibi.codebase import make_prod_codebase
 from cibi.extensions import make_gym
-from cibi.teams import teams
+from cibi.developers import teams
 from cibi.scrum_master import hire_team
+from cibi.agent import EnvError
 
 logging.basicConfig(format='%(asctime)s %(message)s')
 logger = logging.getLogger('cibi')
@@ -44,12 +49,12 @@ def expand_seed_path(logdir, seed_path):
     if not seed_path:
         return None
 
-    hardcoded_path = os.path.join(get_project_dir('codebases'), seed_path)
-    custom_path = os.path.join(logdir, seed_path)
+    hardcoded_path = files(cibi.codebases).joinpath(seed_path)
+    custom_path = Path(logdir).joinpath(seed_path)
     
-    if os.path.isfile(hardcoded_path):
+    if hardcoded_path.exists():
         return hardcoded_path
-    elif os.path.isfile(custom_path):
+    elif custom_path.exists():
         return custom_path
     else:
         err = f"Seed codebase {seed_path} not found"
@@ -83,7 +88,7 @@ def load_summary(logdir, config_hash):
 
     return summary
 
-def run_experiments(logdir, finalize_now):
+def run_experiments(logdir, finalize_now, skip_testing):
     # PREINIT - Reading the experiment's config file
     with open(os.path.join(logdir, 'experiment.yml'), 'r') as f:
         config = yaml.safe_load(f)
@@ -97,7 +102,7 @@ def run_experiments(logdir, finalize_now):
     # (the experiment can be halfway done)
 
     required_version = str(config['cibi-version'])
-    assert cibi.__version__.startswith(required_version)
+    assert version('cibi').startswith(required_version)
 
     render = config.get('render', False)
     discretization_config = config.get('discretization', {})
@@ -121,7 +126,7 @@ def run_experiments(logdir, finalize_now):
 
     summary = load_summary(logdir, config_hash)
     
-    summary['cibi-version'] = cibi.__version__
+    summary['cibi-version'] = version('cibi')
     scrum_config['sprints_elapsed'] = summary['sprints-elapsed']
     scrum_config['quality_callback'] = early_stopping.register
 
@@ -135,7 +140,12 @@ def run_experiments(logdir, finalize_now):
     language = bf.make_bf_plus(config.get('allowed-commands', bf.DEFAULT_CMD_SET))
 
     random_agent = bf.BFExecutable('@!', observation_discretizer, action_sampler, cycle=True, debug=False)
-    bf_io.burn_in(env, random_agent, observation_discretizer, action_sampler)
+
+    try:
+        bf_io.burn_in(env, random_agent, observation_discretizer, action_sampler)
+    except EnvError:
+        logger.error('Could not complete burn in')
+        pass
 
     agent = None
 
@@ -172,7 +182,7 @@ def run_experiments(logdir, finalize_now):
                 except KeyboardInterrupt:
                     logger.info('Keyboard interrupt received. Winding down')
                     break
-                except Exception as e:
+                except EnvError as e:
                     logger.error(traceback.format_exc())
                     failed_sprints += 1
                     if failed_sprints > max_failed_sprints:
@@ -189,7 +199,8 @@ def run_experiments(logdir, finalize_now):
         assert len(archive_branch), 'Trying to finalize training with no programs written'
 
     top_candidates = archive_branch.top_k('total_reward', 256)
-    ensure_enough_test_runs(top_candidates, env, observation_discretizer, action_sampler)
+    if not skip_testing:
+        ensure_enough_test_runs(top_candidates, env, observation_discretizer, action_sampler)
     top_program, top_metrics, top_metadata = top_candidates.top_k('total_reward', 1).peek()
 
     summary['top'] = {
@@ -210,6 +221,7 @@ def run_experiments(logdir, finalize_now):
 @click.command()
 @click.argument('logdir', type=str)
 @click.option('--finalize-now', is_flag=True)
+@click.option('--skip-testing', is_flag=True)
 def run_experiments_cmd(**kwargs):
     return run_experiments(**kwargs)
 

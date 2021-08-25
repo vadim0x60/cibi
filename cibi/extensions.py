@@ -1,6 +1,8 @@
 import gym
 from heartpole import HeartPole
+import auto_als
 
+import os
 class TaxiEnvMultiDiscrete(gym.Env):
     def __init__(self):
         self.openai_gym = gym.make('Taxi-v3')
