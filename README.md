@@ -10,8 +10,6 @@ This package has 2 applications:
 - Run BF++ programs in a reinforcement learning environment
 - Synthesize programs that (hopefully) maximize rewards of the agent in a reinforcement learning environment
 
-This is done with `cibi/run.py` and `cibi/train.py` respectively
-
 ## Requirements
 
 The main prerequisite is Python 3.0-3.7 (we use a version of Tensorsflow incompatible with Python 3.8 and above, feel free to rewrite everything in modern Tensorsflow and pull request)
