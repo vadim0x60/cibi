@@ -1,5 +1,5 @@
 from cibi.agent import Agent
-from cibi import bf
+from cibi.compilers import bf
 from cibi import utils
 from cibi.codebase import make_dev_codebase, make_prod_codebase
 
@@ -142,7 +142,7 @@ class ScrumMaster(Agent):
         code, metrics, metadata = self.dev_branch.pop()
 
         # Compile it (might get syntax errors, our developer doesn't check for that)
-        self.prod_program = bf.Executable(code,
+        self.prod_program = bf.BFExecutable(code,
                                           metrics=metrics, metadata=metadata,
                                           observation_discretizer=self.observation_discretizer, 
                                           action_sampler=self.action_sampler,

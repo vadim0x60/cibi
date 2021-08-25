@@ -1,8 +1,8 @@
 import numpy as np
 
-from cibi.junior_developer import JuniorDeveloper
+from cibi.developers import JuniorDeveloper
 from cibi.codebase import Codebase
-from cibi import bf
+from cibi.compilers import bf
 
 import logging
 import logging.handlers
@@ -10,7 +10,7 @@ logger = logging.getLogger(f'cibi')
 logger.setLevel(logging.INFO)
 logger.addHandler(logging.StreamHandler())
 
-language = bf.make_bf_plus()
+language = bf.BFLanguage()
 
 dev = JuniorDeveloper()
 dev = dev.hire(language)

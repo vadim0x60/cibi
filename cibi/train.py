@@ -10,8 +10,7 @@ import traceback
 from evestop.generic import EVEEarlyStopping
 
 import cibi
-from cibi import bf
-from cibi import bf_io
+from cibi.compilers import bf, bf_io
 from cibi.utils import ensure_enough_test_runs, get_project_dir, calc_hash, update_keys, trusted_version
 from cibi.codebase import make_prod_codebase
 from cibi.extensions import make_gym
@@ -135,7 +134,7 @@ def run_experiments(logdir, finalize_now):
     action_sampler = bf_io.ActionSampler(env.action_space)
     language = bf.make_bf_plus(config.get('allowed-commands', bf.DEFAULT_CMD_SET))
 
-    random_agent = bf.Executable('@!', observation_discretizer, action_sampler, cycle=True, debug=False)
+    random_agent = bf.BFExecutable('@!', observation_discretizer, action_sampler, cycle=True, debug=False)
     bf_io.burn_in(env, random_agent, observation_discretizer, action_sampler)
 
     agent = None

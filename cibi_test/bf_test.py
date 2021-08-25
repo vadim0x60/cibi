@@ -2,13 +2,12 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-"""Tests for common.bf."""
+"""Tests for bf"""
 
 import tensorflow as tf
 import gym.spaces as s
-from cibi import bf  # brain coder
-from cibi import bf_io
-from cibi.bf import Executable, ProgramFinishedError
+from cibi.compilers import bf, bf_io
+from cibi.compilers.bf import BFExecutable, ProgramFinishedError
 
 action_space = s.Discrete(1024)
 observation_space = s.Discrete(1024)
@@ -35,7 +34,7 @@ def evaluate(code, **kwargs):
     # This are unit tests! Debug mode on by default
     kwargs['debug'] = True
 
-  agent = Executable(code, observation_discretizer=observation_discretizer, 
+  agent = BFExecutable(code, observation_discretizer=observation_discretizer, 
                            action_sampler=action_sampler, 
                            **kwargs)
 

@@ -1,6 +1,4 @@
-from cibi import bf
 from cibi.codebase import make_dev_codebase
-from cibi.genome import make_chromosome_from_blueprint
 from cibi.utils import retry
 
 from deap.tools import crossover, mutation

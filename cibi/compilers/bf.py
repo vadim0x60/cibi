@@ -10,7 +10,8 @@ Language info: https://en.wikipedia.org/wiki/Brainfuck
 """
 
 from cibi.agent import Agent, ActionError
-from cibi.bf_io import ObservationDiscretizer, ActionSampler, DEFAULT_STEPS
+from cibi.compilers.bf_io import ObservationDiscretizer, ActionSampler, DEFAULT_STEPS
+from cibi.compilers import Language
 from collections import namedtuple
 
 import numpy as np
@@ -36,8 +37,12 @@ class State(object):
   AWAITING_INPUT = 'awaiting-input'
   FINISHED = 'finished'
 
-BF_EOS_INT = 0  # Also used as SOS (start of sequence).
+DIGITS = '0123456789'
+LETTERS = 'abcdefghijklmnopqrstuvwxyz'
+BF_DEFAULT_CMD_SET = '@><^+-[].,!~01234abcde'
 BF_EOS_CHAR = TEXT_EOS_CHAR = '_'
+BF_POINTER_ACTIONS = LETTERS + '><'
+BF_MEMORY_ACTIONS = DIGITS + '\+\-'
 
 def buildbracemap(code):
   """Build jump map.
@@ -78,51 +83,28 @@ class ProgramFinishedError(ActionError):
     msg = f'Trying to execute program {code} that has finished with {program_result}'
     super().__init__(msg, program_result)
 
-DIGITS = '0123456789'
-LETTERS = 'abcdefghijklmnopqrstuvwxyz'
-DEFAULT_CMD_SET = '@><^+-[].,!~01234abcde'
-
-def make_bf_plus(allowed_commands=DEFAULT_CMD_SET):
-  BF_INT_TO_CHAR = BF_EOS_CHAR + allowed_commands
-  BF_CHAR_TO_INT = dict([(c, i) for i, c in enumerate(BF_INT_TO_CHAR)])
-  pointer_actions = LETTERS + '><'
-  memory_actions = DIGITS + '\+\-'
-
-  def bf_int_to_char(code_indices):
-    code = ''.join(BF_INT_TO_CHAR[i] for i in code_indices)
-    return code
-
-  def bf_char_to_int(code):
-    code_indices = [BF_CHAR_TO_INT[c] for c in code]
-    return code_indices
-
-  def prune_step(code):
+class BFLanguage(Language):
+  def __init__(self, allowed_commands=BF_DEFAULT_CMD_SET):
+    super().__init__(allowed_commands, BF_EOS_CHAR)
+    
+  def prune_step(self, code):
     code = re.sub(r'\+\-|><|\-\+|<>', '', code)
-    code = re.sub(fr'[{pointer_actions}]+(?=[{LETTERS}])', '', code)
-    code = re.sub(fr'[{memory_actions}]+(?=[{DIGITS}])', '', code)
+    code = re.sub(fr'[{BF_POINTER_ACTIONS}]+(?=[{LETTERS}])', '', code)
+    code = re.sub(fr'[{BF_MEMORY_ACTIONS}]+(?=[{DIGITS}])', '', code)
     return code
 
-  def prune(code):
+  def prune(self, code):
     old_code = None
     new_code = code
 
     while new_code != old_code:
-      old_code, new_code = new_code, prune_step(new_code)
+      old_code, new_code = new_code, self.prune_step(new_code)
 
     return new_code
 
-  return {
-    'alphabet': BF_INT_TO_CHAR,
-    'int_to_char': bf_int_to_char,
-    'char_to_int': bf_char_to_int,
-    'eos_int': BF_EOS_INT,
-    'eos_char': BF_EOS_CHAR,
-    'prune': prune
-  }
-
-class Executable(Agent):
+class BFExecutable(Agent):
   def __init__(self, code, observation_discretizer, action_sampler,
-               language=make_bf_plus(),
+               language=BFLanguage(),
                metrics={}, metadata={},
                init_memory=None, null_value=0,
                max_steps=2 ** 12, require_correct_syntax=True, debug=False,
@@ -130,7 +112,7 @@ class Executable(Agent):
     self.code = code
     self.metrics = metrics
     self.metadata = metadata
-    self.alphabet = language['alphabet']
+    self.alphabet = language.__alphabet__
 
     code = list(code)
     self.bracemap, correct_syntax = buildbracemap(code)  # will modify code list

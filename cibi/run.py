@@ -1,6 +1,5 @@
 import click
-from cibi import bf
-from cibi import bf_io
+from cibi.compilers import bf, bf_io
 from cibi.extensions import make_gym
 from sortedcontainers import SortedDict
 import time
@@ -16,7 +15,7 @@ def print_list(lname, l):
         print(elem)
 
 def run_episode(env, code, observation_discretizer, action_sampler, render=False, debug=False):
-    executable = bf.Executable(code, observation_discretizer, action_sampler, cycle=True, debug=debug)
+    executable = bf.BFExecutable(code, observation_discretizer, action_sampler, cycle=True, debug=debug)
         
     rollout = executable.attend_gym(env, render = render)
 
@@ -74,7 +73,7 @@ def run(env_name, input_code, avg, best, input_file, output_file,
                                                                history_length=fluid_discretization_history)
         action_sampler = bf_io.ActionSampler(env.action_space, debug=debug)
 
-        random_agent = bf.Executable('@!', observation_discretizer, action_sampler, cycle=True, debug=False)
+        random_agent = bf.BFExecutable('@!', observation_discretizer, action_sampler, cycle=True, debug=False)
         episode_count =bf_io.burn_in(env, random_agent, observation_discretizer, action_sampler)
         print(f'{episode_count} episodes of burn in done')
 

@@ -1,16 +1,13 @@
-"""
-teams.py
+from cibi.developers import junior, senior, tester
 
-All combinations and configurations of developers we have available
-When trying out new settings, we recommend adding a new team to this 
-file for reproducibility
-"""
+JuniorDeveloper = junior.JuniorDeveloper
+SeniorDeveloper = senior.SeniorDeveloper
+Tester = tester.Tester
 
-from cibi.senior_developer import SeniorDeveloper
-from cibi.junior_developer import JuniorDeveloper
-from cibi.tester import Tester
 from cibi.lm import LanguageModel
 
+# When trying out new settings, we recommend adding a new team to this 
+# file for reproducibility
 teams = [
     [SeniorDeveloper({}, LanguageModel), Tester()],
     [SeniorDeveloper({}, LanguageModel), JuniorDeveloper(eps=0), Tester()],

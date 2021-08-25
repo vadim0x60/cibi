@@ -18,7 +18,6 @@ import tensorflow as tf
 
 import cibi.rollout as rollout_lib  # brain coder
 from cibi import utils
-from cibi import bf
 from cibi.codebase import make_dev_codebase, make_codebase_like, Codebase
 
 import logging
