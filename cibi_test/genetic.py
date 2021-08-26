@@ -1,6 +1,6 @@
 import numpy as np
 
-from cibi.developers import JuniorDeveloper
+from cibi.roles import JuniorDeveloper
 from cibi.codebase import Codebase
 from cibi.compilers import bf
 

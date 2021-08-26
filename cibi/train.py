@@ -19,8 +19,8 @@ import cibi.codebases
 from cibi.compilers import bf, bf_io
 from cibi.utils import ensure_enough_test_runs, calc_hash, update_keys, trusted_version
 from cibi.codebase import make_prod_codebase
-from cibi.developers import teams
-from cibi.scrum_master import hire_team
+from cibi.roles import teams
+from cibi.roles.scrum_master import hire_team
 from cibi.agent import EnvError
 
 logging.basicConfig(format='%(asctime)s %(message)s')
@@ -207,7 +207,6 @@ def run_experiments(logdir, finalize_now, skip_testing):
     summary['top'] = {
         'code': str(top_program),
         'author': str(top_metadata['author']),
-        'method': str(top_metadata['method']),
         'parent1': str(top_metadata['parent1']),
         'parent2': str(top_metadata['parent2']),
         'total_reward': float(top_metrics['total_reward'])

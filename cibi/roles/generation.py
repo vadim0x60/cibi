@@ -10,6 +10,7 @@ import numpy as np
 from collections import namedtuple
 
 from cibi import utils
+from cibi.roles import Developer
 
 logger = logging.getLogger(f'cibi.{__file__}')
 
@@ -48,7 +49,7 @@ if gpus_available:
   devices = [device for device in devices if device.device_type != 'CPU']
 device_cycle = itertools.cycle(devices)
 
-class SeniorDeveloper(object):
+class Writer(object):
   """Writes code using 2 language models
 
   A global model on the parameter server, and a local
