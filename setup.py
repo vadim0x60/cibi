@@ -13,13 +13,15 @@ dependencies = [
       'deap==1.*',
       'pyyaml==5.*',
       'pandas==1.*',
-      'heartpole==1.*',
       'evestop==0.*',
-      'auto-als',
       'bandits @ git+https://github.com/vadim0x60/bandits.git',
       'importlib_metadata==2.*',
       'importlib_resources==5.*'
 ]
+
+extras = {
+      'health': ['auto-als', 'heartpole==2.*']
+}
 
 setup(name='cibi',
       version='5.3',
@@ -29,6 +31,7 @@ setup(name='cibi',
       url='https://github.com/vadim0x60/cibi',
       packages=['cibi', 'cibi.codebases'],
       install_requires=dependencies,
+      extras_require=extras,
       include_package_data=True,
       license='Apache 2.0',
       entry_points='''

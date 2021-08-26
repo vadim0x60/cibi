@@ -112,7 +112,6 @@ class BFExecutable(Agent):
     self.code = code
     self.metrics = metrics
     self.metadata = metadata
-    self.alphabet = language.__alphabet__
 
     code = list(code)
     self.bracemap, correct_syntax = buildbracemap(code)  # will modify code list
@@ -210,53 +209,52 @@ class BFExecutable(Agent):
     command = self.code[self.codeptr]
     self.record_snapshot(command)
 
-    if command in self.alphabet:
-      if command == '>':
-        self.cellptr += 1
+    if command == '>':
+      self.cellptr += 1
 
-      if command == '<':
-        self.cellptr = 0 if self.cellptr <= 0 else self.cellptr - 1
+    if command == '<':
+      self.cellptr = 0 if self.cellptr <= 0 else self.cellptr - 1
 
-      if command == '^':
-        # I don't trust languages without GOTO
-        goto = int(self.read())
-        if goto >= 0:
-          self.cellptr = goto
+    if command == '^':
+      # I don't trust languages without GOTO
+      goto = int(self.read())
+      if goto >= 0:
+        self.cellptr = goto
 
-      if command == '+':
-        value = self.read()
-        value += 1
-        self.write(value)
+    if command == '+':
+      value = self.read()
+      value += 1
+      self.write(value)
 
-      if command == '-':
-        value = self.read()
-        value -= 1
-        self.write(value)
+    if command == '-':
+      value = self.read()
+      value -= 1
+      self.write(value)
 
-      if command == '~':
-        value = self.read()
-        value = -value
-        self.write(value) 
+    if command == '~':
+      value = self.read()
+      value = -value
+      self.write(value) 
 
-      if command == '@':
-        self.write(np.random.randint(DEFAULT_STEPS))
+    if command == '@':
+      self.write(np.random.randint(DEFAULT_STEPS))
 
-      if command in DIGITS:
-        self.write(DIGITS.index(command))
+    if command in DIGITS:
+      self.write(DIGITS.index(command))
 
-      if command in LETTERS:
-        self.cellptr = LETTERS.index(command)
+    if command in LETTERS:
+      self.cellptr = LETTERS.index(command)
 
-      if command == '[' and self.read() <= 0: self.codeptr = self.bracemap[self.codeptr]
-      if command == ']' and self.read() > 0: self.codeptr = self.bracemap[self.codeptr]
+    if command == '[' and self.read() <= 0: self.codeptr = self.bracemap[self.codeptr]
+    if command == ']' and self.read() > 0: self.codeptr = self.bracemap[self.codeptr]
 
-      if command == '.': self.action_stack.insert(0, self.read())
-      if command == '!': self.action_stack.append(self.read())
+    if command == '.': self.action_stack.insert(0, self.read())
+    if command == '!': self.action_stack.append(self.read())
 
-      if command == ',':
-        self.state = State.AWAITING_INPUT
-        self.record_snapshot(command)
-        return
+    if command == ',':
+      self.state = State.AWAITING_INPUT
+      self.record_snapshot(command)
+      return
 
     self.codeptr += 1
     self.steps += 1

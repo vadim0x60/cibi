@@ -14,10 +14,11 @@ from pathlib import Path
 from importlib_resources import files
 
 import cibi
+import cibi.envs
+import cibi.codebases
 from cibi.compilers import bf, bf_io
 from cibi.utils import ensure_enough_test_runs, calc_hash, update_keys, trusted_version
 from cibi.codebase import make_prod_codebase
-from cibi.extensions import make_gym
 from cibi.developers import teams
 from cibi.scrum_master import hire_team
 from cibi.agent import EnvError
@@ -111,7 +112,7 @@ def run_experiments(logdir, finalize_now, skip_testing):
     scrum_config = {key.replace('-', '_'): config[key] for key in scrum_keys if key in config}
 
     team = teams[config['team']]
-    env = make_gym(config['env'])
+    env = gym.make(config['env'])
 
     max_failed_sprints = config.get('max-failed-sprints', 10)
     max_sprints = config.get('max-sprints', 1000000) * len(team)
@@ -137,9 +138,9 @@ def run_experiments(logdir, finalize_now, skip_testing):
                                                            history_length=discretization_config.get('history', 1024),
                                                            force_fluid=discretization_config.get('force-history', False))
     action_sampler = bf_io.ActionSampler(env.action_space)
-    language = bf.make_bf_plus(config.get('allowed-commands', bf.DEFAULT_CMD_SET))
+    language = bf.BFLanguage(config.get('allowed-commands', bf.BF_DEFAULT_CMD_SET))
 
-    random_agent = bf.BFExecutable('@!', observation_discretizer, action_sampler, cycle=True, debug=False)
+    random_agent = bf.BFExecutable('@!', observation_discretizer, action_sampler, language=language, cycle=True, debug=False)
 
     try:
         bf_io.burn_in(env, random_agent, observation_discretizer, action_sampler)

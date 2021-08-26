@@ -165,13 +165,7 @@ class LanguageModel:
 
     self.top_reward = 0.0
     self.embeddings_trainable = True
-
-    self.action_space = len(language['alphabet'])
-    self.observation_space = len(language['alphabet'])
-    self.int_to_char = language['int_to_char']
-    self.char_to_int = language['char_to_int']
-    self.eos_char = language['eos_char']
-    self.eos_int = language['eos_int']    
+    self.language = language
 
     self.no_op = tf.no_op()
 
@@ -222,7 +216,7 @@ class LanguageModel:
         tf.contrib.rnn.MultiRNNCell(
             [tf.contrib.rnn.BasicLSTMCell(cell_size)
              for cell_size in self.config.policy_lstm_sizes]),
-        self.action_space,
+        len(self.language.token_space),
         dtype=dtype,
         suppress_index=None)
 
@@ -232,7 +226,7 @@ class LanguageModel:
         initializer=tf.random_uniform_initializer(minval=-1.0, maxval=1.0)):
       obs_embeddings = tf.get_variable(
           'embeddings',
-          [self.observation_space, self.config.obs_embedding_size],
+          [len(self.language.token_space), self.config.obs_embedding_size],
           dtype=dtype, trainable=self.embeddings_trainable)
       self.obs_embeddings = obs_embeddings
 
@@ -240,7 +234,7 @@ class LanguageModel:
     # RL policy and value networks #
     ################################
 
-    initial_state = tf.fill([batch_size], self.eos_int)
+    initial_state = tf.fill([batch_size], self.language.eos_int)
     def loop_fn(loop_time, cell_output, cell_state, loop_state):
       """Function called by tf.nn.raw_rnn to instantiate body of the while_loop.
 
@@ -292,7 +286,7 @@ class LanguageModel:
             tf.multinomial(logits=scaled_logits, num_samples=1)[:, 0],
             tf.zeros([batch_size], dtype=tf.int64)))
         elements_finished = tf.logical_or(
-            tf.equal(chosen_outputs, self.eos_int),
+            tf.equal(chosen_outputs, self.language.eos_int),
             loop_time >= self.config.timestep_limit)
         output_lengths = tf.where(
             elements_finished,
@@ -353,7 +347,7 @@ class LanguageModel:
 
     self.actions = tf.placeholder(tf.int32, [None, None], name='actions')
     # Add SOS to beginning of the sequence.
-    inputs = rshift_time(self.actions, fill=self.eos_int)
+    inputs = rshift_time(self.actions, fill=self.language.eos_int)
     with tf.variable_scope('policy', reuse=True):
       logits, _ = tf.nn.dynamic_rnn(
           self.policy_cell, tf.gather(obs_embeddings, inputs),
@@ -384,7 +378,7 @@ class LanguageModel:
         self.policy_multipliers * episode_masks)
 
     # pi_loss is scalar
-    acs_onehot = tf.one_hot(self.actions, self.action_space, dtype=dtype)
+    acs_onehot = tf.one_hot(self.actions, len(self.language.token_space), dtype=dtype)
     self.acs_onehot = acs_onehot
     chosen_masked_log_probs = acs_onehot * a_log_probs
     pi_target = tf.expand_dims(a_policy_multipliers, -1)
@@ -412,7 +406,7 @@ class LanguageModel:
       # Add SOS to beginning of the sequence.
       offp_inputs = tf.gather(obs_embeddings,
                               rshift_time(self.off_policy_targets,
-                                          fill=self.eos_int))
+                                          fill=self.language.eos_int))
       with tf.variable_scope('policy', reuse=True):
         offp_logits, _ = tf.nn.dynamic_rnn(
             self.policy_cell, offp_inputs, self.off_policy_target_lengths,
@@ -663,8 +657,8 @@ class LanguageModel:
     for actions, episode_length, action_log_probs in zip(
         batch_actions, episode_lengths, log_probs
       ):
-      code = self.int_to_char(actions[:episode_length])
-      if code[-1] == self.eos_char:
+      code = self.language.int_to_char(actions[:episode_length])
+      if code[-1] == self.language.eos_char:
         code = code[:-1]
 
       logger.info(f'Wrote program: {code}')
@@ -1015,7 +1009,7 @@ class LanguageModel:
       batch_targets[i] = targets
 
     actions = utils.stack_pad(
-              [self.char_to_int(code)
+              [self.language.char_to_int(code)
                 for code in reinforce_branch['code']], 
                 pad_axes=0)
     actions = np.array(actions, dtype=int)

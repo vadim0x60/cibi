@@ -72,25 +72,25 @@ class RefactoringLever():
         codebase = make_dev_codebase()
         metadata = {'method': self.name, 
                     'parent1': code}
-        codebase.commit(language['prune'](code), metadata=metadata)
+        codebase.commit(language.prune(code), metadata=metadata)
         return codebase
 
 def cx_with_number_arrays(language, crossover_over_numbers):
     def crossover_over_chars(c1, c2, indpb):
-        c1 = language['char_to_int'](c1)
-        c2 = language['char_to_int'](c2)
+        c1 = language.char_to_int(c1)
+        c2 = language.char_to_int(c2)
         res1, res2 = crossover_over_numbers(c1, c2, indpb)
-        res1 = language['int_to_char'](res1)
-        res2 = language['int_to_char'](res2)
+        res1 = language.int_to_char(res1)
+        res2 = language.int_to_char(res2)
         return res1, res2
     return crossover_over_chars
 
 def mut_with_number_arrays(mutate_over_numbers):
     def mutate_over_chars(language, old_code, indpb):
-        old_code = language['char_to_int'](old_code)
+        old_code = language.char_to_int(old_code)
         new_code = mutate_over_numbers(language, old_code, indpb)
 
-        new_code = language['int_to_char'](new_code)
+        new_code = language.int_to_char(new_code)
         return new_code
     return mutate_over_chars
 
@@ -100,8 +100,7 @@ default_bandit = [
     # This is very BF-specific, implementation-specific and unobvious
     # FIXME
     MutationLever('uniform_mutation', mut_with_number_arrays(
-        lambda language, code, indpb: mutation.mutUniformInt(code, 1, 
-                                                             len(language['alphabet']) - 1, indpb)[0])),
+        lambda language, code, indpb: mutation.mutUniformInt(code, 1, len(language.token_space) - 1, indpb)[0])),
     CrossoverLever('1point_crossover', lambda c1, c2, indpb: crossover.cxOnePoint(c1, c2)),
     CrossoverLever('2point_crossover', lambda c1, c2, indpb: crossover.cxTwoPoint(c1, c2)),
     CrossoverLever('uniform_crossover', crossover.cxUniform),

@@ -1,9 +1,11 @@
 import click
-from cibi.compilers import bf, bf_io
-from cibi.extensions import make_gym
 from sortedcontainers import SortedDict
 import time
 
+from cibi.compilers import bf, bf_io
+
+import gym
+import cibi.envs
 class ExecutionError(Exception):
     def __init__(self, result):
         super().__init__()
@@ -48,7 +50,7 @@ def average(coll):
 @click.option('--debug', is_flag=True, help='Show a visual rendering of the env and log full execution traces')
 def run(env_name, input_code, avg, best, input_file, output_file, 
         debug, force_fluid_discretization, fluid_discretization_history):
-    env = make_gym(env_name)
+    env = gym.make(env_name)
 
     if input_code:
         lines = [input_code]
