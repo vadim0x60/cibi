@@ -1,8 +1,5 @@
 import gym
-from heartpole import HeartPole
-import auto_als
 
-import os
 class TaxiEnvMultiDiscrete(gym.Env):
     def __init__(self):
         self.openai_gym = gym.make('Taxi-v3')
@@ -23,14 +20,3 @@ class TaxiEnvMultiDiscrete(gym.Env):
 
     def render(self, *args, **kwargs):
         return self.openai_gym.render(*args, **kwargs)
-
-extensions = {
-    'Taxi-v3mod': TaxiEnvMultiDiscrete,
-    'HeartPole-v0': HeartPole
-}
-
-def make_gym(gym_name):
-    try:
-        return extensions[gym_name]()
-    except KeyError:
-        return gym.make(gym_name)
